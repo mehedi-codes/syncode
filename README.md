@@ -1,5 +1,7 @@
 # [VSCodium](https://vscodium.com) Setup
 
+> Last update: 2023-06-06
+>
 > This guide is intended to be used as a reference for setting up VSCodium.
 
 <details>
