@@ -1,0 +1,91 @@
+{
+  //* Workbench
+  "window.menuBarVisibility": "toggle",
+  "workbench.sideBar.location": "left",
+  "window.autoDetectColorScheme": true,
+  "workbench.list.smoothScrolling": true,
+  "workbench.editor.labelFormat": "short",
+  "workbench.startupEditor": "newUntitledFile",
+  "workbench.productIconTheme": "fluent-icons",
+  "workbench.iconTheme": "material-icon-theme",
+  "security.workspace.trust.untrustedFiles": "open",
+  "workbench.colorTheme": "Tokyo Night",
+
+  //* Files, Explorer & breadcrumbs
+  "breadcrumbs.enabled": false,
+  "explorer.confirmDelete": true,
+  "explorer.compactFolders": false,
+  "files.autoSave": "afterDelay",
+  "files.defaultLanguage": "{activeEditorLanguage}",
+
+  //* Editor
+  "editor.tabSize": 2,
+  "editor.fontSize": 17,
+  "editor.wordWrap": "on",
+  "editor.cursorStyle": "line",
+  "editor.glyphMargin": false,
+  "editor.formatOnSave": true,
+  "editor.linkedEditing": true,
+  "editor.fontLigatures": true,
+  "editor.mouseWheelZoom": true,
+  "editor.formatOnPaste": false,
+  "editor.smoothScrolling": true,
+  "editor.minimap.enabled": false,
+  "editor.renderWhitespace": "all",
+  "editor.detectIndentation": true,
+  "editor.cursorBlinking": "expand",
+  "editor.snippetSuggestions": "top",
+  "editor.suggestSelection": "first",
+  "editor.guides.bracketPairs": true,
+  "editor.wordBasedSuggestions": false,
+  "editor.suggest.localityBonus": true,
+  "editor.renderLineHighlight": "gutter",
+  "editor.scrollbar.horizontal": "hidden",
+  "editor.mouseWheelScrollSensitivity": 2,
+  "editor.renderControlCharacters": false,
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.bracketPairColorization.enabled": true,
+  "editor.acceptSuggestionOnCommitCharacter": false,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.fontFamily": "JetBrainsMono Nerd Font Mono",
+
+  //* Colorize
+  "colorize.enable_search_variables": false,
+  "colorize.hide_current_line_decorations": false,
+  "colorize.colorized_colors": ["HEXA", "RGB", "HSL"],
+  "colorize.languages": [
+    "css",
+    "sass",
+    "scss",
+    "less",
+    "postcss",
+    "sss",
+    "stylus",
+    "xml",
+    "svg",
+    "json",
+    "html",
+    "htm"
+  ],
+  //* Codeium
+  "codeium.enableConfig": {
+    "*": true,
+    "plaintext": true,
+    "Log": true,
+    "xml": true
+  },
+  //*CSpell Checker Extension
+  "cSpell.enabled": true,
+  "cSpell.language": "en",
+  "cSpell.enableFiletypes": ["shellscript"],
+  "cSpell.customDictionaries": {
+    "project-words": {
+      "name": "mh-codewords",
+      "path": "%userprofile%/dictionary/codewords.txt",
+      "description": "Personal Coding Words",
+      "addWords": true
+    },
+    "custom": true,
+    "internal-terms": false
+  }
+}
