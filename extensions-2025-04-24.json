@@ -1,0 +1,30 @@
+{
+  "recommendations": [
+    "josemurilloc.aura-spirit-dracula",
+    "formulahendry.auto-close-tag",
+    "formulahendry.auto-rename-tag",
+    "aaron-bond.better-comments",
+    "subframe7536.custom-ui-style",
+    "miguelsolorio.fluent-icons",
+    "pulkitgangwar.nextjs-snippets",
+    "miguelsolorio.symbols",
+    "steoates.autoimport",
+    "ultram4rine.vscode-choosealicense",
+    "streetsidesoftware.code-spell-checker",
+    "eugenejeon.codesnap-plus-fix",
+    "higurashi-kagome.dir-tree",
+    "dbaeumer.vscode-eslint",
+    "github.copilot",
+    "github.copilot-chat",
+    "codezombiech.gitignore",
+    "eamodio.gitlens",
+    "chrisbibby.hide-node-modules",
+    "cardinal90.multi-cursor-case-preserve",
+    "christian-kohler.path-intellisense",
+    "jeff-hykin.polacode-2019",
+    "bradlc.vscode-tailwindcss",
+    "meganrogge.template-string-converter",
+    "jasonlhy.hungry-delete",
+    "wakatime.vscode-wakatime"
+  ]
+}
