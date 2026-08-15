@@ -1,0 +1,66 @@
+{
+  // ============================================================
+  //  COMBINED EXTENSIONS — all snapshots merged
+  //  Sources: extensions.json (current, 2026-08-14) /
+  //           extensions-2025-10-12.json /
+  //           extensions-2025-04-24.json
+  //
+  //  ⚠️ Reference file — the curated "settings-required" list
+  //     lives in latest-extensions.jsonc.
+  //
+  //  Legend:
+  //    [current]  = installed now (2026-08-14)
+  //    [2025-10]  = installed dump (WSL era)
+  //    [2025-04]  = recommendations list
+  // ============================================================
+
+  "recommendations": [
+    //! [current] — installed 2026-08-14
+    "astro-build.astro-vscode",
+    "aurorascharff.vercel-docs-theme",          // Vercel Dark theme
+    "biomejs.biome",                            // also [2025-10]
+    "bradlc.vscode-tailwindcss",                // also [2025-10] [2025-04]
+    "editorconfig.editorconfig",
+    "kedarghadyalji.tailwind-warning-auto-fix",
+    "littensy.charmed-icons",                   // current icon theme
+    "miguelsolorio.fluent-icons",               // also [2025-10] [2025-04]
+    "miguelsolorio.symbols",                    // also [2025-10] [2025-04]
+    "ms-dotnettools.csdevkit",
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.vscode-dotnet-runtime",
+    "sst-dev.opencode",                         // opencode integration
+    "subframe7536.custom-ui-style",             // also [2025-04]
+
+    //! [2025-10] — WSL-era installed dump (named entries only;
+    //!  ~15 more entries were UUID-only, unidentifiable)
+    "arcticicestudio.nord-visual-studio-code",
+    "catppuccin.catppuccin-vsc",
+    "enkia.tokyo-night",
+    "github.copilot",                           // also [2025-04]; dropped in current
+    "github.copilot-chat",                      // also [2025-04]; dropped in current
+    "jasonlhy.hungry-delete",                   // also [2025-04]
+    "josemurilloc.aura-spirit-dracula",         // also [2025-04]; Aura theme era
+    "jovejonovski.ocean-green",
+    "cardinal90.multi-cursor-case-preserve",    // also [2025-04]
+    "meganrogge.template-string-converter",     // also [2025-04]
+    "tahayvr.matteblack",
+
+    //! [2025-04] — recommendations list (26)
+    "formulahendry.auto-close-tag",
+    "formulahendry.auto-rename-tag",
+    "aaron-bond.better-comments",
+    "pulkitgangwar.nextjs-snippets",
+    "steoates.autoimport",
+    "ultram4rine.vscode-choosealicense",
+    "streetsidesoftware.code-spell-checker",    // cSpell settings in [2023] settings era
+    "eugenejeon.codesnap-plus-fix",
+    "higurashi-kagome.dir-tree",
+    "dbaeumer.vscode-eslint",
+    "codezombiech.gitignore",
+    "eamodio.gitlens",
+    "chrisbibby.hide-node-modules",
+    "christian-kohler.path-intellisense",
+    "jeff-hykin.polacode-2019",
+    "wakatime.vscode-wakatime"
+  ]
+}
