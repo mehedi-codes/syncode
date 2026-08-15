@@ -1,105 +1,49 @@
-# [VSCodium](https://vscodium.com) Setup
+# VS Code Config
 
-> Last update: 2023-06-06
->
-> This guide is intended to be used as a reference for setting up VSCodium.
+Personal Visual Studio Code configuration — live sync, merged history, and documentation.
 
-<details>
+## Current setup
 
-<summary>What is VSCodium?</summary>
+| Area | Setting |
+|---|---|
+| **Theme** | `Vercel Dark` |
+| **Icons** | `charmed-icons` (files) · `fluent-icons` (product) |
+| **Font** | `DankMono Nerd Font` — 16px, ligatures on |
+| **Layout** | Zen/minimal: activity bar hidden, status bar hidden, breadcrumbs off, single tabs, command center off, no minimap, hidden scrollbars |
+| **Formatting** | `biomejs.biome` default formatter; format on save/type/paste; 2-space tabs, ruler @140, wrap @140 |
+| **Terminal** | Git Bash (Windows default), DankMono font, line cursor |
+| **Git** | Smart commit, autofetch, no sync confirm, auto-update imports on file move |
+| **Privacy** | Telemetry off, trusted JSON-schema domains whitelist |
+| **Editor niceties** | Expand cursor blink, smooth scrolling, bracket colorization, italic comments, hover after 1.5s |
+| **Files** | Auto-save after delay, trim trailing whitespace + final newline, `css→tailwindcss` / `cshtml→html` / `appsettings*.json→jsonc` associations |
 
-[VSCodium](https://github.com/vscodium/vscodium) is a free and open-source code editor based on [Visual Studio Code](https://github.com/microsoft/vscode), providing the same features and functionality without the proprietary [Microsoft](https://www.microsoft.com) branding and telemetry.
+> Full per-setting explanations and alternative values: [`settings.md`](./settings.md). Annotated history: [`settings.jsonc`](./settings.jsonc).
 
-</details>
-<details>
+## Files
 
-<summary>Can I Migrate from Visual Studio Code to VSCodium?</summary>
+| File | Purpose |
+|---|---|
+| `settings.json` | **Live config** — symlink to `%APPDATA%\Code\User\settings.json`. Edit here → VS Code updates instantly (and vice versa). Not tracked in git (see `.gitignore`). |
+| `settings.jsonc` | **Merged reference** — every setting across all config eras (2023 → current), annotated with era tags and `was:` history. VS Code won't load this; it's the archive + source of truth. |
+| `settings.md` | Explanations — what each setting does and every value it accepts. |
+| `extensions.jsonc` | Merged extension list across eras (current / 2025-10 / 2025-04). |
+| `extensions.md` | Clickable extension links — **Ctrl+click** opens the extension page inside VS Code (not the browser). |
+| `AGENTS.md` | VS Code documentation index (llms.txt format) — a docs map for AI agents. |
+| `vscodium.md` | The original VSCodium setup guide (archived). |
 
-If you want to migrate from [Visual Studio Code](https://github.com/microsoft/vscode) to [VSCodium](https://github.com/vscodium/vscodium) follow this [Official Guide](https://github.com/VSCodium/vscodium/blob/a02839b466d8d01b8a61ea9611f0b74039538eae/DOCS.md#migrating-from-visual-studio-code-to-vscodium) from [VSCodium](https://github.com/vscodium/vscodium).
+## How the sync works
 
-</details>
+- `settings.json` is a **symbolic link** to `%APPDATA%\Code\User\settings.json` (Windows, cross-volume OK — symlink, not hard link).
+- Requires Windows **Developer Mode** (or one-time admin) to create.
+- Git ignores it (`core.symlinks` issue — the link would be committed as path text otherwise). It lives in the repo only as a live-editing convenience.
+- To re-create the link: `New-Item -ItemType SymbolicLink -Path settings.json -Target "$env:APPDATA\Code\User\settings.json"`
 
-## Installing VSCodium
+## Updating configs
 
-**Windows**
-**Install**
+1. Edit `settings.jsonc` (the annotated reference) for history-tracking.
+2. Apply live changes in `settings.json` (via the symlink) or copy values over.
+3. Keep `settings.md` explanations in sync for anything new.
 
-```powershell
-winget install -e --id VSCodium.VSCodium
-```
+## Compatibility
 
-**Linux**
-**Install**
-
-```bash
-snap install codium --classic
-```
-
-## Configuring VSCodium
-
-**Favourite**
-**Fonts**
-
-* [JetBrainsMono Nerd Font Mono](https://github.com/devbytemehedi/JetBrainsMono).
-* [Operator Mono Ligature](https://github.com/devbytemehedi/Operator-Mono-Ligature)
-
-**Favourite**
-**Themes**
-
-* [2077 theme](https://github.com/endormi/vscode-2077-theme) 
-* [Ayu](#)
-* [Dracula Dark +](#)
-* [Sweet Dracula](#)
-* [Tokyo Night](#)
-
-**Favourite**
-**Extensions**
-
-* [Auto Close Tag](https://github.com/formulahendry/vscode-auto-close-tag.git)
-
-* [Auto Rename Tag](https://github.com/formulahendry/vscode-auto-rename-tag.git)
-
-* [Better Comments](https://github.com/aaron-bond/better-comments.git) 
-
-* [Code Spell Checker](https://github.com/streetsidesoftware/vscode-spell-checker.git)
-
-* [Codeium](https://open-vsx.org/extension/Codeium/codeium)
-
-* [Colorize](https://github.com/kamikillerto/vscode-colorize.git) 
-
-* [Fluent Icons](https://github.com/misolori/vscode-fluent-icons.git)
-
-* [Highlight Maching Tag](https://github.com/vincaslt/vscode-highlight-matching-tag.git) 
-
-* [HTML CSS Support](https://github.com/ecmel/vscode-html-css.git)
-
-* [HTML-validate](#)
-
-* [indent-rainbow](https://github.com/oderwat/vscode-indent-rainbow.git) 
-
-* [Material Icon Theme](https://github.com/PKief/vscode-material-icon-theme.git)
-
-* [Path Intellisense](https://github.com/ChristianKohler/PathIntellisense.git) 
-
-* [CodeSnap](#) 
-
-* [Prettier](https://github.com/prettier/prettier-vscode.git) 
-
-* [Live Server (Five Server)](https://github.com/yandeu/five-server-vscode.git)
-
-* [Reload Can Solve Any Problems](#)
-
-* [Markdown Preview Github Styling](https://github.com/mjbvz/vscode-github-markdown-preview-style.git) 
-
-* [markdownlint](https://github.com/DavidAnson/vscode-markdownlint.git) 
-
-**To install these extensions,**
-
-1. Open [VSCodium](https://github.com/vscodium/vscodium)
-1. Go to the `Extensions` tab
-1. `search` for the Extension name
-1. Click on the `Install` button to add the extension.
-
-## Settings
-  [settings.json](./settings.json)
-> Latest version of this file wil be found [here](https://tinyurl.com/vscodium-settings)
+Settings format is shared across VS Code forks (VSCodium, Cursor, Windsurf, Positron) — the user/workspace/profile hierarchy and these files carry over; only config *paths* and marketplaces differ.
