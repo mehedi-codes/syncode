@@ -1,21 +1,35 @@
 #!/usr/bin/env bash
 # ============================================================
-#  syncode — sync settings + extensions to VS Code-family editors
+#  syncode — sync your editor setup to every VS Code-family editor
 #  Version: 1.0.0
 # ============================================================
 set -Eeuo pipefail
 
 VERSION="1.0.0"
+TOOL_NAME="syncode"
+DESCRIPTION="sync your editor setup to every VS Code-family editor"
+
+BANNER="$(cat <<'BANNER_EOF'
+:'######:'##:::'##'##::: ##:'######::'#######:'########:'########:
+'##... ##. ##:'##::###:: ##'##... ##'##.... ##:##.... ##:##.....::
+ ##:::..::. ####:::####: ##:##:::..::##:::: ##:##:::: ##:##:::::::
+. ######:::. ##::::## ## ##:##:::::::##:::: ##:##:::: ##:######:::
+:..... ##::: ##::::##. ####:##:::::::##:::: ##:##:::: ##:##...::::
+'##::: ##::: ##::::##:. ###:##::: ##:##:::: ##:##:::: ##:##:::::::
+. ######:::: ##::::##::. ##. ######:. #######::########::########:
+:......:::::..::::..::::..::......:::.......::........::........::
+BANNER_EOF
+)"
 
 # Guard: must run under real bash
 if [[ -z "${BASH_VERSION:-}" ]]; then
-  echo "ERROR: syncode must be run with bash (not $0)" >&2
+  echo "ERROR: $TOOL_NAME must be run with bash (not $0)" >&2
   exit 1
 fi
 
 # Guard: bash 4+ required (associative arrays, [[ ]])
 if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
-  echo "ERROR: syncode requires bash 4 or newer (found $BASH_VERSION)" >&2
+  echo "ERROR: $TOOL_NAME requires bash 4 or newer (found $BASH_VERSION)" >&2
   echo "       macOS ships bash 3.2 by default — install via Homebrew: brew install bash" >&2
   exit 1
 fi
@@ -39,19 +53,10 @@ REVERT=false
 
 usage() {
   cat <<EOF
-syncode — apply settings.json + extensions.json to any VS Code-family editor
 
-$(cat <<'BANNER'
-:'######::'#######:'########:'########:'######:'##:::'##'##::: ##:'######::
-'##... ##'##.... ##:##.... ##:##.....:'##... ##. ##:'##::###:: ##'##... ##:
- ##:::..::##:::: ##:##:::: ##:##:::::::##:::..::. ####:::####: ##:##:::..::
- ##:::::::##:::: ##:##:::: ##:######::. ######:::. ##::::## ## ##:##:::::::
- ##:::::::##:::: ##:##:::: ##:##...::::..... ##::: ##::::##. ####:##:::::::
- ##::: ##:##:::: ##:##:::: ##:##::::::'##::: ##::: ##::::##:. ###:##::: ##:
-. ######:. #######::########::########. ######:::: ##::::##::. ##. ######::
-:......:::.......::........::........::......:::::..::::..::::..::......:::
-BANNER
-)
+$BANNER
+
+$TOOL_NAME v$VERSION — $DESCRIPTION
 
 USAGE:
     $SCRIPT_NAME [OPTIONS]
@@ -62,7 +67,7 @@ OPTIONS:
     -d, --dry-run   show the plan, change nothing
     -r, --revert    restore editors to factory defaults:
                     settings.json.bak -> settings.json if it exists,
-                    else delete settings.json; uninstall syncode-installed
+                    else delete settings.json; uninstall $TOOL_NAME-installed
                     extensions. With -d: applies to all detected editors;
                     without -d: interactive selection like apply.
 
@@ -82,10 +87,10 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -h|--help)    usage 0 ;;
-    -v|--version) printf 'syncode v%s\n' "$VERSION"; exit 0 ;;
+    -h|--help)   usage 0 ;;
+    -v|--version) printf '%s v%s\n' "$TOOL_NAME" "$VERSION"; exit 0 ;;
     -d|--dry-run) DRY_RUN=true; shift ;;
-    -r|--revert)  REVERT=true; shift ;;
+    -r|--revert) REVERT=true; shift ;;
     *)
       log_error "unknown option: $1"
       usage 1
@@ -97,17 +102,8 @@ done
 #  Banner
 # ------------------------------------------------------------
 banner() {
-  cat <<'EOF'
-:'######::'#######:'########:'########:'######:'##:::'##'##::: ##:'######::
-'##... ##'##.... ##:##.... ##:##.....:'##... ##. ##:'##::###:: ##'##... ##:
- ##:::..::##:::: ##:##:::: ##:##:::::::##:::..::. ####:::####: ##:##:::..::
- ##:::::::##:::: ##:##:::: ##:######::. ######:::. ##::::## ## ##:##:::::::
- ##:::::::##:::: ##:##:::: ##:##...::::..... ##::: ##::::##. ####:##:::::::
- ##::: ##:##:::: ##:##:::: ##:##::::::'##::: ##::: ##::::##:. ###:##::: ##:
-. ######:. #######::########::########. ######:::: ##::::##::. ##. ######::
-:......:::.......::........::........::......:::::..::::..::::..::......:::
-EOF
-  printf '  v%s — sync settings + extensions to VS Code-family editors\n\n' "$VERSION"
+  printf '\n%s\n\n' "$BANNER"
+  printf '%s v%s — %s\n\n' "$TOOL_NAME" "$VERSION" "$DESCRIPTION"
 }
 
 # ------------------------------------------------------------
@@ -194,7 +190,7 @@ detect_forks() {
       if [[ "$found" == true ]]; then
         printf '%s\n' "$fork" > "$tmp/$fork"
       fi
-    ) &
+    ) < /dev/null &
     pids+=("$!")
   done
 
@@ -228,7 +224,27 @@ installed_exts() {
   local cli
   cli="$(command -v "$1" 2>/dev/null || true)"
   [[ -n "$cli" ]] || return 0
-  "$cli" --list-extensions 2>/dev/null || true
+  "$cli" --list-extensions </dev/null 2>/dev/null || true
+}
+
+editor_version() {
+  local cli v
+  cli="$(command -v "$1" 2>/dev/null || true)"
+  [[ -n "$cli" ]] || { printf '%s' "n/a"; return; }
+  v="$("$cli" --version </dev/null 2>/dev/null | head -n1)"
+  printf '%s' "${v:-n/a}"
+}
+
+missing_exts() {
+  local want have id out=""
+  want="$(ext_ids)"
+  have="$(installed_exts "$1")"
+  for id in $want; do
+    if ! printf '%s\n' "$have" | grep -qx "$id"; then
+      out="$out $id"
+    fi
+  done
+  printf '%s' "${out# }"
 }
 
 # ------------------------------------------------------------
@@ -242,7 +258,7 @@ plan_fork() {
     else
       out="delete settings.json (factory defaults)"
     fi
-    out="$out, uninstall syncode extensions"
+    out="$out, uninstall $TOOL_NAME extensions"
   else
     local sp bd
     sp="$(settings_path "$fork")"
@@ -253,9 +269,20 @@ plan_fork() {
       out="copy settings (backup -> .bak)"
       [[ -f "$bd" ]] && out="$out (overwrite .bak)"
     fi
-    out="$out, install missing extensions"
+    local missing cli
+    cli="$(command -v "$fork" 2>/dev/null || true)"
+    if [[ -n "$cli" ]]; then
+      missing="$(missing_exts "$fork")"
+      if [[ -n "$missing" ]]; then
+        out="$out, install missing extensions: $missing"
+      else
+        out="$out, extensions up to date"
+      fi
+    else
+      out="$out, no CLI found — extensions skipped"
+    fi
   fi
-  printf '  %-10s %s\n' "$fork" "$out"
+  printf '%s' "$out"
 }
 
 apply_fork() {
@@ -288,25 +315,24 @@ apply_fork() {
   # extensions: install missing / uninstall syncode-installed
   cli="$(command -v "$fork" 2>/dev/null || true)"
   if [[ -n "$cli" ]]; then
-    local want have id
-    want="$(ext_ids)"
-    have="$(installed_exts "$fork")"
+    local id missing
+    missing="$(missing_exts "$fork")"
 
     if [[ "$REVERT" == true ]]; then
+      local want
+      want="$(ext_ids)"
       for id in $want; do
-        if printf '%s\n' "$have" | grep -qx "$id"; then
-          "$cli" --uninstall-extension "$id" >/dev/null 2>&1 || true
+        if printf '%s\n' "$(installed_exts "$fork")" | grep -qx "$id"; then
+          "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
           echo "    $fork: uninstalled $id"
         fi
       done
     else
-      for id in $want; do
-        if ! printf '%s\n' "$have" | grep -qx "$id"; then
-          if "$cli" --install-extension "$id" --force >/dev/null 2>&1; then
-            echo "    $fork: installed $id"
-          else
-            log_warn "$fork: FAILED to install $id"
-          fi
+      for id in $missing; do
+        if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
+          echo "    $fork: installed $id"
+        else
+          log_warn "$fork: FAILED to install $id"
         fi
       done
     fi
@@ -321,10 +347,22 @@ apply_fork() {
 banner
 detect_forks
 
-if [[ "${#detected[@]}" -eq 0 ]]; then
-  log_error "no VS Code-family editor detected on $OS_NAME"
-  exit 1
+# plan table
+echo "Plan:"
+if [[ "$REVERT" == true ]]; then
+  echo "  mode: revert to factory defaults"
 fi
+printf '  %-10s %-12s %s\n' "name" "version" "status"
+printf '  %-10s %-12s %s\n' "----" "-------" "------"
+for f in "${FORK_ORDER[@]}"; do
+  if printf '%s\n' "${detected[@]}" | grep -qx "$f"; then
+    printf '  %-10s %-12s %s\n' "$f" "$(editor_version "$f")" "$(plan_fork "$f")"
+  else
+    printf '  %-10s %-12s %s\n' "$f" "n/a" "not installed"
+  fi
+done
+
+echo ""
 
 # selection (menu only when not dry-run and more than one fork)
 selected=("${detected[@]}")
@@ -346,6 +384,7 @@ if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
     done
     echo "  a) select all     n) select none     <enter> = apply checked"
     read -r -p "toggle (e.g. 1 3), a=all, n=none, enter=apply: " input
+    input="${input%$'\r'}"
 
     case "$input" in
       "") break ;;
@@ -372,28 +411,20 @@ if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
   done
 fi
 
-# plan
-echo ""
-echo "Plan:"
-if [[ "$REVERT" == true ]]; then
-  echo "  mode: revert to factory defaults"
-fi
-for f in "${detected[@]}"; do
-  if printf '%s\n' "${selected[@]}" | grep -qx "$f"; then
-    plan_fork "$f"
-  else
-    printf '  %-10s not selected\n' "$f"
-  fi
-done
-
 if [[ "$DRY_RUN" == true ]]; then
-  echo ""
   echo "DRY RUN — nothing applied."
   exit 0
 fi
 
+if [[ "${#selected[@]}" -eq 0 ]]; then
+  echo "nothing to apply."
+  exit 0
+fi
+
+echo ""
 # confirm
-read -r -p "Apply? [Y/n] " ans
+read -r -p "Apply? [Y/n] " ans || ans="n"
+ans="${ans%$'\r'}"
 case "$ans" in
   n|N) echo "aborted."; exit 0 ;;
   *)   : ;;

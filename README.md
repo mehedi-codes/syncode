@@ -1,16 +1,16 @@
 # syncode
 
-> Sync your settings + extensions to any VS Code-family editor, in one command.
+> Sync your editor setup to every VS Code-family editor, in one command.
 
 ```
-:'######::'#######:'########:'########:'######:'##:::'##'##::: ##:'######::
-'##... ##'##.... ##:##.... ##:##.....:'##... ##. ##:'##::###:: ##'##... ##:
- ##:::..::##:::: ##:##:::: ##:##:::::::##:::..::. ####:::####: ##:##:::..::
- ##:::::::##:::: ##:##:::: ##:######::. ######:::. ##::::## ## ##:##:::::::
- ##:::::::##:::: ##:##:::: ##:##...::::..... ##::: ##::::##. ####:##:::::::
- ##::: ##:##:::: ##:##:::: ##:##::::::'##::: ##::: ##::::##:. ###:##::: ##:
-. ######:. #######::########::########. ######:::: ##::::##::. ##. ######::
-:......:::.......::........::........::......:::::..::::..::::..::......:::
+:'######:'##:::'##'##::: ##:'######::'#######:'########:'########:
+'##... ##. ##:'##::###:: ##'##... ##'##.... ##:##.... ##:##.....::
+ ##:::..::. ####:::####: ##:##:::..::##:::: ##:##:::: ##:##:::::::
+. ######:::. ##::::## ## ##:##:::::::##:::: ##:##:::: ##:######:::
+:..... ##::: ##::::##. ####:##:::::::##:::: ##:##:::: ##:##...::::
+'##::: ##::: ##::::##:. ###:##::: ##:##:::: ##:##:::: ##:##:::::::
+. ######:::: ##::::##::. ##. ######:. #######::########::########:
+:......:::::..::::..::::..::......:::.......::........::........::
 ```
 
 `syncode` detects which editors are installed, shows you a plan, and — with
@@ -35,7 +35,7 @@ are detected automatically via `$OSTYPE`; under WSL, syncode targets your
 ## Usage
 
 ```bash
-bash syncode.sh            # detect + menu → plan → confirm → apply
+bash syncode.sh            # detect → plan → select → confirm → apply
 bash syncode.sh -d         # preview the plan, change nothing
 bash syncode.sh -r         # restore editors to factory defaults
 ```
@@ -46,19 +46,20 @@ bash syncode.sh -r         # restore editors to factory defaults
 | --- | --- |
 | `-h`, `--help` | Show help and exit |
 | `-v`, `--version` | Show version and exit |
-| `-d`, `--dry-run` | Show the plan for all detected editors, apply nothing |
+| `-d`, `--dry-run` | Show the plan for all editor families, apply nothing |
 | `-r`, `--revert` | Restore editors to factory defaults (see below) |
 
 ## What it does
 
 1. **Detect** — checks for `code`, `codium`, `cursor`, `windsurf`, `positron`
    on PATH or by config directory (in parallel).
-2. **Select** — when multiple editors are found, a toggle menu lets you pick
+2. **Plan** — prints a table (name / version / status) for all editor
+   families, marking not-installed ones.
+3. **Select** — when multiple editors are found, a toggle menu lets you pick
    (numbers toggle, `a` = all, `n` = none, Enter = apply checked). With
    `-d`, all detected editors are selected by default.
-3. **Plan** — prints exactly what will happen per editor, then asks for
-   confirmation (`Y/n`, defaults to yes).
-4. **Apply** — per editor, in order:
+4. **Confirm** — asks for confirmation (`Y/n`, defaults to yes).
+5. **Apply** — per editor, in order:
    - **Settings**: if `settings.json` differs, the current one is backed up
      to `settings.json.bak` and the repo copy is installed.
    - **Extensions**: only missing extensions are installed (never
@@ -76,7 +77,7 @@ bash syncode.sh -r         # restore editors to factory defaults
 
 ```bash
 bash syncode.sh -r           # interactive selection, then confirm
-bash syncode.sh -r -d        # plan for all detected, apply nothing
+bash syncode.sh -r -d        # plan for all editor families, apply nothing
 ```
 
 For each selected editor, revert:
