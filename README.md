@@ -1,7 +1,3 @@
-# syncode
-
-> Sync your editor setup to every VS Code-family editor, in one command.
-
 ```
 :'######:'##:::'##'##::: ##:'######::'#######:'########:'########:
 '##... ##. ##:'##::###:: ##'##... ##'##.... ##:##.... ##:##.....::
@@ -12,6 +8,7 @@
 . ######:::: ##::::##::. ##. ######:. #######::########::########:
 :......:::::..::::..::::..::......:::.......::........::........::
 ```
+> Sync your editor setup to every VS Code-family editor, in one command.
 
 `syncode` detects which editors are installed, shows you a plan, and — with
 your confirmation — copies `settings.json` and installs the extensions listed
