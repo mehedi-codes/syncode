@@ -93,6 +93,7 @@ For each selected editor, revert:
 syncode.sh        the deploy script
 settings.json     your editor settings (applied to every editor)
 extensions.json   extension IDs (installed when missing)
+extensions.md     usage guides for every managed extension
 ```
 
 ## Notes
