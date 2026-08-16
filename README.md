@@ -94,8 +94,9 @@ extensions.json   extension IDs (installed when missing)
 
 ## Notes
 
-- Requires **bash** — on Windows, Git Bash or WSL (run from within the repo
-  or call by absolute path).
+- Requires **bash 4+** — on Windows, Git Bash or WSL (run from within the repo
+  or call by absolute path). macOS ships bash 3.2 by default; install a newer
+  bash via Homebrew (`brew install bash`) and use it to run syncode.
 - Extensions are installed from the marketplace your editor uses (e.g.
   Open VSX for VSCodium). Proprietary extensions (GitHub Copilot) that have
   no marketplace equivalent will fail to install — syncode reports the

@@ -13,6 +13,13 @@ if [[ -z "${BASH_VERSION:-}" ]]; then
   exit 1
 fi
 
+# Guard: bash 4+ required (associative arrays, [[ ]])
+if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
+  echo "ERROR: syncode requires bash 4 or newer (found $BASH_VERSION)" >&2
+  echo "       macOS ships bash 3.2 by default — install via Homebrew: brew install bash" >&2
+  exit 1
+fi
+
 # Safe script directory detection
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
@@ -311,14 +318,14 @@ fi
 selected=("${detected[@]}")
 if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
   declare -A checked=()
-  local f
+  f=""
   for f in "${detected[@]}"; do checked[$f]=1; done
 
   while true; do
     echo "Detected editors:"
-    local i=1
+    i=1
     for f in "${detected[@]}"; do
-      local mark=" "
+      mark=" "
       if [[ "${checked[$f]}" -eq 1 ]]; then
         mark="x"
       fi
