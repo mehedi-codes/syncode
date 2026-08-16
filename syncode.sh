@@ -236,7 +236,7 @@ plan_fork() {
     sp="$(settings_path "$fork")"
     bd="$(backup_path "$fork")"
     if [[ -f "$sp" ]] && cmp -s "$sp" "$SCRIPT_DIR/settings.json"; then
-      out="settings already in sync, install missing extensions"
+      out="settings already in sync"
     else
       out="copy settings (backup -> .bak)"
       [[ -f "$bd" ]] && out="$out (overwrite .bak)"
