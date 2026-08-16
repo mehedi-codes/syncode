@@ -41,6 +41,16 @@ usage() {
   cat <<EOF
 syncode — apply settings.json + extensions.json to any VS Code-family editor
 
+$(cat <<'BANNER'
+  ____                 _         ___
+ / ___| _   _ _ __ ___| | ___   / _ \ _ __   ___ _   _ ___
+ \___ \| | | | '__/ _ \ |/ _ \ | | | | '_ \ / _ \ | | / __|
+  ___) | |_| | | |  __/ |  __/ | |_| | | | |  __/ |_| \__ \
+ |____/ \__, |_|  \___|_|\___|  \___/|_| |_|\___|\__, |___/
+        |___/                                     |___/
+BANNER
+)
+
 USAGE:
     $SCRIPT_NAME [OPTIONS]
 
@@ -48,7 +58,7 @@ OPTIONS:
     -h, --help      show this help and exit
     -v, --version   show version and exit
     -d, --dry-run   show the plan, change nothing
-    --revert        restore editors to factory defaults:
+    -r, --revert    restore editors to factory defaults:
                     settings.json.bak -> settings.json if it exists,
                     else delete settings.json; uninstall syncode-installed
                     extensions. With -d: applies to all detected editors;
@@ -63,7 +73,7 @@ WHAT IT DOES:
 EXAMPLES:
     bash $SCRIPT_NAME           apply to selected editors (menu)
     bash $SCRIPT_NAME -d        preview the plan, change nothing
-    bash $SCRIPT_NAME --revert  restore editors to factory defaults
+    bash $SCRIPT_NAME -r        restore editors to factory defaults
 EOF
   exit "${1:-0}"
 }
@@ -73,7 +83,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help)    usage 0 ;;
     -v|--version) printf 'syncode v%s\n' "$VERSION"; exit 0 ;;
     -d|--dry-run) DRY_RUN=true; shift ;;
-    --revert)     REVERT=true; shift ;;
+    -r|--revert)  REVERT=true; shift ;;
     *)
       log_error "unknown option: $1"
       usage 1
@@ -87,12 +97,14 @@ done
 banner() {
   cat <<'EOF'
 
-  ____                 _         ___
- / ___| _   _ _ __ ___| | ___   / _ \ _ __   ___ _   _ ___
- \___ \| | | | '__/ _ \ |/ _ \ | | | | '_ \ / _ \ | | / __|
-  ___) | |_| | | |  __/ |  __/ | |_| | | | |  __/ |_| \__ \
- |____/ \__, |_|  \___|_|\___|  \___/|_| |_|\___|\__, |___/
-        |___/                                     |___/
+:'######:::'#######::'########::'########::'######::'##:::'##:'##::: ##::'######::
+'##... ##:'##.... ##: ##.... ##: ##.....::'##... ##:. ##:'##:: ###:: ##:'##... ##:
+ ##:::..:: ##:::: ##: ##:::: ##: ##::::::: ##:::..:::. ####::: ####: ##: ##:::..::
+ ##::::::: ##:::: ##: ##:::: ##: ######:::. ######::::. ##:::: ## ## ##: ##:::::::
+ ##::::::: ##:::: ##: ##:::: ##: ##...:::::..... ##:::: ##:::: ##. ####: ##:::::::
+ ##::: ##: ##:::: ##: ##:::: ##: ##:::::::'##::: ##:::: ##:::: ##:. ###: ##::: ##:
+. ######::. #######:: ########:: ########:. ######::::: ##:::: ##::. ##:. ######::
+:......::::.......:::........:::........:::......::::::..:::::..::::..:::......:::
 
 EOF
   printf '  v%s — sync settings + extensions to VS Code-family editors\n\n' "$VERSION"

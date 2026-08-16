@@ -35,7 +35,7 @@ are detected automatically via `$OSTYPE`; under WSL, syncode targets your
 ```bash
 bash syncode.sh            # detect + menu → plan → confirm → apply
 bash syncode.sh -d         # preview the plan, change nothing
-bash syncode.sh --revert   # restore editors to factory defaults
+bash syncode.sh -r         # restore editors to factory defaults
 ```
 
 ### Options
@@ -45,7 +45,7 @@ bash syncode.sh --revert   # restore editors to factory defaults
 | `-h`, `--help` | Show help and exit |
 | `-v`, `--version` | Show version and exit |
 | `-d`, `--dry-run` | Show the plan for all detected editors, apply nothing |
-| `--revert` | Restore editors to factory defaults (see below) |
+| `-r`, `--revert` | Restore editors to factory defaults (see below) |
 
 ## What it does
 
@@ -73,8 +73,8 @@ bash syncode.sh --revert   # restore editors to factory defaults
 ## Reverting (factory defaults)
 
 ```bash
-bash syncode.sh --revert           # interactive selection, then confirm
-bash syncode.sh --revert -d        # plan for all detected, apply nothing
+bash syncode.sh -r           # interactive selection, then confirm
+bash syncode.sh -r -d        # plan for all detected, apply nothing
 ```
 
 For each selected editor, revert:
