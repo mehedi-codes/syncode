@@ -29,6 +29,20 @@ Works on **Windows (Git Bash or WSL)**, **macOS**, and **Linux**. Platforms
 are detected automatically via `$OSTYPE`; under WSL, syncode targets your
 **Windows** editor installs.
 
+## Install
+
+One-time runner — fetches the latest `syncode.sh` + config with **curl**
+(no git, no cache) and runs it from a temp dir. Needs bash 4+ and curl:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o /tmp/syncode-install.sh && bash /tmp/syncode-install.sh
+```
+
+Flags pass through to `syncode.sh` (`-d`, `-r`, `-v`, `-h`), e.g.
+`bash /tmp/syncode-install.sh -d` for a dry-run.
+
+Prefer cloning? The repo runs directly too — see [Usage](#usage).
+
 ## Usage
 
 ```bash
@@ -87,6 +101,7 @@ For each selected editor, revert:
 ## Files
 
 ```
+install.sh        one-time runner (curl-fetches syncode.sh + config)
 syncode.sh        the deploy script
 settings.json     your editor settings (applied to every editor)
 extensions.json   extension IDs (installed when missing)
