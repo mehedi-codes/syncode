@@ -22,7 +22,7 @@ if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
   exit 1
 fi
 
-tmp="$(mktemp -d)"
+tmp="$(mktemp -d .syncode.XXXXXX)"
 trap 'rm -rf -- "$tmp"' EXIT
 
 # One curl call fetches all files in parallel into the temp dir
@@ -31,5 +31,6 @@ curl -fsSL \
   -o "$tmp/settings.json"   "$REPO_RAW/settings.json" \
   -o "$tmp/extensions.json" "$REPO_RAW/extensions.json"
 
-# Run with the real terminal attached (stdin inherited — prompts work)
-exec bash "$tmp/syncode.sh" "$@"
+# Run with the real terminal attached (stdin inherited — prompts work).
+# Not exec: the EXIT trap below must fire to clean up the temp dir.
+bash "$tmp/syncode.sh" "$@"
