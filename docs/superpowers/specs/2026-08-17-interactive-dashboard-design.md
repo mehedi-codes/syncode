@@ -30,6 +30,10 @@ comparator.
    fresh install shows `not synced` / `none installed` until `config` runs).
 6. `q` quits (exit 0).
 
+**Menu input errors:** any out-of-range or unrecognized input prints
+`invalid: <input>` and re-prompts (mirrors the existing toggle-menu behavior
+in both ports). No input ever crashes the loop.
+
 ### Flags — automation shortcuts (bypass menu)
 
 | Action | Short | Full |
@@ -59,16 +63,20 @@ One row per editor, 4 columns:
   dir).
 - `latest`: live lookup (parallel, with timeout); `unknown` if unreachable.
   Not blocking — dashboard renders, column fills when the call returns.
+  **Session cache:** `latest` is fetched at most once per session, then reused
+  on every dashboard re-render; it is re-fetched only after an `install` or
+  `update` action completes (installed version just changed, so the gap
+  matters). Without this, a 6-action session would fire 12+ HTTP calls.
 - `settings`: `synced` / `diverged` / `—` (no `settings.json`). Uses existing
   `Test-SameSettings` hash comparison.
 - `extensions`: `up to date` / `N missing` / `none installed` / `n/a` (no CLI
-  on PATH — same limitation as today).
+  on PATH or known install path — see CLI resolution below).
 
 Columns reflect live state on every dashboard render, including after actions.
 
 ## Action semantics
 
-| Action | What it does | Confirm? |
+| action | What it does | Confirm? |
 | --- | --- | --- |
 | install | install latest stable if missing (see channels) | no |
 | update | upgrade if installed < latest; no-op if current | no |
@@ -79,6 +87,11 @@ Columns reflect live state on every dashboard render, including after actions.
 
 No auto-sync after install: install hands back to the dashboard; user runs
 `config` explicitly.
+
+**`update` with `unknown` latest:** if the live lookup failed (offline), the
+update action aborts with `[ERROR] can't check for updates (network
+unavailable)` — it never attempts a blind upgrade. `unknown` is a display
+value, not a "try anyway" signal.
 
 ## Release channels
 
@@ -113,14 +126,31 @@ winget is uninstall fallback only.
       "win":   "https://update.code.visualstudio.com/<ver>/win32-x64-user/stable",
       "linux": "https://update.code.visualstudio.com/<ver>/linux-deb-x64/stable"
     },
-    "uninstaller": { "win": "unins000.exe", "linux": "" },
-    "package": { "winget": "Microsoft.VisualStudioCode", "apt": "code", "dnf": "code" }
+    "uninstall": {
+      "win":   { "type": "inno", "exe": "unins000.exe" },
+      "linux": { "type": "pkg", "name": "code" }
+    },
+    "package": { "winget": "Microsoft.VisualStudioCode" }
   },
-  "codium": { "…": "…" }
+  "codium": {
+    "latestApi": "https://api.github.com/repos/VSCodium/vscodium/releases/latest",
+    "installer": {
+      "win":   "https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodiumUserSetup-x64-<ver>.exe",
+      "linux": "https://github.com/VSCodium/vscodium/releases/download/<ver>/codium_<ver>_amd64.deb"
+    },
+    "uninstall": {
+      "win":   { "type": "inno", "exe": "unins000.exe" },
+      "linux": { "type": "pkg", "name": "codium" }
+    },
+    "package": { "winget": "VSCodium.VSCodium" }
+  }
 }
 ```
 
 - `win`/`linux` keys per platform; one `<ver>` placeholder substituted at use.
+- `uninstall.win` → Inno uninstaller exe; `uninstall.linux` → package name for
+  `apt/dnf remove` (tarball installs fall back to `rm -rf` of the install dir).
+  No empty-string "linux uninstaller" — the schema is honest per platform.
 - Shipped through `install.ps1`/`install.sh` as a 4th fetched file beside the
   script (existing `$CONFIG_DIR` / `CONFIG_DIR` resolution reused unchanged).
 
@@ -155,6 +185,23 @@ src/
    `%LOCALAPPDATA%\Programs\VSCodium`; Linux: `/usr/share/code`,
    `/usr/share/codium`, `~/.local/share/VSCodium`).
 
+## CLI resolution (closes the fresh-install dead-end)
+
+`config` and the `extensions` dashboard column need the editor's CLI. A fresh
+install is not on the current PATH, so resolving via PATH alone would make
+"install → config" a dead end in the same session. Both ports therefore
+resolve the CLI in order:
+
+1. `Get-Command <fork>` / `command -v <fork>` (PATH).
+2. Known install-path binary:
+   - Windows: `%LOCALAPPDATA%\Programs\<Code|VSCodium>\bin\<code|codium>.cmd`
+   - Linux: `/usr/bin/<code|codium>` (deb/rpm) or
+     `~/.local/share/<Code|VSCodium>/bin/<code|codium>` (tarball)
+
+If neither resolves, `extensions` shows `n/a` and `config` reports the CLI
+couldn't be found (settings are still copied — that path is
+PATH-independent).
+
 ## Error handling
 
 - Missing/invalid `releases.json`: hard `[ERROR]` + exit 1 for release commands
@@ -172,7 +219,9 @@ src/
   with a tiny assert harness (no machine state).
 - Dry-run of each flag (`-d`) — no mutation.
 - Manual smoke: dashboard on machine with/without editors; install → dashboard
-  shows not-synced; config → synced; reset/uninstall typed confirmation.
+  shows not-synced; config → synced; reset/uninstall typed confirmation;
+  fresh-install → config works in the same session (CLI resolution);
+  offline → `latest` shows `unknown`, `update` aborts cleanly.
 
 ## Out of scope
 
