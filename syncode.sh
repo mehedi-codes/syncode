@@ -30,7 +30,6 @@ fi
 # Guard: bash 4+ required (associative arrays, [[ ]])
 if [[ "${BASH_VERSINFO[0]:-0}" -lt 4 ]]; then
   echo "ERROR: $TOOL_NAME requires bash 4 or newer (found $BASH_VERSION)" >&2
-  echo "       macOS ships bash 3.2 by default — install via Homebrew: brew install bash" >&2
   exit 1
 fi
 
@@ -107,46 +106,16 @@ banner() {
 }
 
 # ------------------------------------------------------------
-#  OS / platform detection
+#  OS / platform detection (Linux only)
 # ------------------------------------------------------------
-OS_NAME=""
 DATA_ROOT=""
 
 case "$OSTYPE" in
-  msys*|mingw*)
-    OS_NAME="Windows (Git Bash)"
-    DATA_ROOT="${APPDATA:-$HOME/AppData/Roaming}"
-    ;;
   linux*)
-    if [[ -n "${WSL_DISTRO_NAME:-}" ]] || (uname -r | grep -qi microsoft); then
-      # Running under WSL — target the Windows editor install.
-      # stdin is redirected from /dev/null so powershell.exe cannot
-      # consume the script's interactive input (read).
-      OS_NAME="Windows (WSL)"
-      if command -v powershell.exe &>/dev/null; then
-        WIN_APPDATA="$(powershell.exe -NoProfile -Command '[Environment]::GetFolderPath("ApplicationData")' < /dev/null 2>/dev/null | tr -d '\r' | tail -n 1)"
-      fi
-      if [[ -n "${WIN_APPDATA:-}" ]]; then
-        if command -v wslpath &>/dev/null; then
-          DATA_ROOT="$(wslpath "$WIN_APPDATA")"
-        else
-          DATA_ROOT="$WIN_APPDATA"
-        fi
-      else
-        log_error "cannot resolve Windows AppData from WSL"
-        exit 1
-      fi
-    else
-      OS_NAME="Linux"
-      DATA_ROOT="$HOME/.config"
-    fi
-    ;;
-  darwin*)
-    OS_NAME="macOS"
-    DATA_ROOT="$HOME/Library/Application Support"
+    DATA_ROOT="$HOME/.config"
     ;;
   *)
-    log_error "unsupported platform: $OSTYPE"
+    log_error "unsupported platform: $OSTYPE (syncode.sh is Linux-only; Windows uses syncode.ps1)"
     exit 1
     ;;
 esac
