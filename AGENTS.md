@@ -11,14 +11,16 @@ editors are present, shows a plan, asks for confirmation, then copies
 to factory defaults.
 
 There is **no build step, no package manager, no tests, no CI**. The tool is
-two bash scripts; everything else is data or docs.
+four scripts (two bash, two PowerShell); everything else is data or docs.
 
 ## Repository layout
 
 | File | Role |
 | --- | --- |
-| `install.sh` | One-time runner: curl-fetches `syncode.sh` + configs into a temp dir and runs them. Requires curl. |
-| `syncode.sh` | The whole tool (441 lines). Everything else is data or docs. |
+| `install.sh` | Linux one-time runner: curl-fetches `syncode.sh` + configs into a temp dir and runs them. Requires curl. |
+| `syncode.sh` | The whole Linux tool (~400 lines, bash). Everything else is data or docs. |
+| `install.ps1` | Windows one-time runner: `Invoke-WebRequest` fetches `syncode.ps1` + configs into a temp dir and runs them. |
+| `syncode.ps1` | The whole Windows tool (PowerShell). |
 | `settings.json` | Source-of-truth editor settings (JSONC). Applied to every selected editor. |
 | `extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
 | `extensions.md` | Usage guides for every extension listed in `extensions.json`. |
@@ -26,10 +28,15 @@ two bash scripts; everything else is data or docs.
 
 ## Technology
 
-- **Pure bash 4+** — no external dependencies beyond standard coreutils
-  (`grep`, `cmp`, `cp`, `mv`, `rm`, `mktemp`, `printf`, `tr`, `uname`).
-  Uses associative arrays, `[[ ]]`, background jobs for parallel detection.
-  `install.sh` additionally needs `curl` (no git involved).
+- **Linux: pure bash 4+** — no external dependencies beyond standard
+  coreutils (`grep`, `cmp`, `cp`, `mv`, `rm`, `mktemp`, `printf`, `tr`,
+  `uname`). Uses associative arrays, `[[ ]]`, background jobs for parallel
+  detection. `install.sh` additionally needs `curl` (no git involved).
+- **Windows: PowerShell 5.1+** — `syncode.ps1` uses built-in cmdlets only
+  (`Invoke-WebRequest`, `Get-Command`, `Get-FileHash`, `Read-Host`); no
+  modules, no curl. `install.ps1` pins TLS 1.2 for 5.1.
+- The two implementations are **feature-identical ports**; keep them in
+  lockstep (same flags, same output, same version string).
 - **JSONC** (`settings.json`, `extensions.json`) — comments are valid and used
   as section headers (`//! Visual / UI`, etc.).
 - **No Makefile, no lockfile, no npm/pip/anything.** Running the script IS the
@@ -49,21 +56,23 @@ Flow: `detect → plan → select → confirm → apply`.
 5. **Apply** (`apply_fork`): per editor — copy settings (backing up existing
    to `settings.json.bak`), install only *missing* extensions.
 
-### Platform handling (`$OSTYPE`)
+### Platform handling
 
-| OS | `DATA_ROOT` | Notes |
+| OS | Tool | `DATA_ROOT` |
 | --- | --- | --- |
-| `msys*`/`mingw*` (Git Bash) | `$APPDATA` | Windows |
-| `linux*` + WSL marker | Windows AppData via `powershell.exe` | Targets **Windows** editor installs; stdin is redirected from `/dev/null` so `powershell.exe` can't eat interactive input |
-| `linux*` (native) | `~/.config` | |
-| `darwin*` | `~/Library/Application Support` | |
+| Linux | `syncode.sh` | `~/.config` |
+| Windows | `syncode.ps1` | `$env:APPDATA` |
 
-Every subprocess that doesn't need stdin (`powershell.exe`, `code --version`,
+`syncode.sh` refuses to run on anything but Linux (`$OSTYPE` guard) — Windows
+uses `syncode.ps1`, no Git Bash/WSL involved.
+
+Every subprocess that doesn't need stdin (`code --version`,
 `--list-extensions`, `--install-extension`, detection subshells) gets
 `</dev/null` so nothing can consume the script's interactive input — this was
 the root cause of the confirm-prompt bug (interactive runs exited 1 when a
 piped editor CLI ate the buffered answer). Keep this discipline for new
-subprocess calls.
+subprocess calls. The PowerShell port has the same concern: native CLI calls
+get `$null |` piped in to close stdin, and prompts read via `[Console]::In`.
 
 `FORK_DIR` maps fork → config dir name (`Code`, `VSCodium`, `Cursor`,
 `Windsurf`, `Positron`).
@@ -77,8 +86,8 @@ Per selected editor: restore `settings.json.bak` → `settings.json` (or delete
 ## How to run
 
 ```bash
-# One-time (no git, no cache — curl-fetches latest + runs from a temp dir)
-curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o /tmp/syncode-install.sh && bash /tmp/syncode-install.sh
+# Linux (no git, no cache — curl-fetches latest + runs from a temp dir)
+curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o syncode-install.sh && bash syncode-install.sh
 
 bash syncode.sh            # apply (interactive selection when >1 editor)
 bash syncode.sh -d         # dry-run: plan only, changes nothing — safe to run anywhere
@@ -87,15 +96,29 @@ bash syncode.sh -r -d      # revert plan only
 bash syncode.sh -h | -v    # help / version
 ```
 
-`install.sh` passes flags through to `syncode.sh` (e.g. `-d` for a dry-run).
+```powershell
+# Windows (irm fetches latest + runs from a temp dir)
+irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile install.ps1; .\install.ps1
+
+.\syncode.ps1             # apply (interactive selection when >1 editor)
+.\syncode.ps1 -d          # dry-run: plan only, changes nothing
+.\syncode.ps1 -r          # revert to factory defaults
+.\syncode.ps1 -r -d       # revert plan only
+.\syncode.ps1 -h | -v     # help / version
+```
+
+`install.sh`/`install.ps1` pass flags through to the tool (e.g. `-d` for a
+dry-run).
 
 **Testing / verification without touching a real machine:**
 
-- `bash -n syncode.sh` — syntax check.
-- `bash syncode.sh -d` — dry run; runs detection + plan, applies nothing.
+- Linux: `bash -n syncode.sh` — syntax check; `bash syncode.sh -d` — dry run.
+- Windows: run `syncode.ps1 -d` in pwsh; `powershell.exe -File syncode.ps1 -d`
+  for the 5.1 path. Parse check:
+  `[System.Management.Automation.Language.Parser]::ParseFile('syncode.ps1',[ref]$null,[ref]$err)`.
 - `shellcheck syncode.sh` if available (not a repo dependency).
-- ⚠️ `bash syncode.sh` (without `-d`) **writes to real editor config dirs**
-  and can overwrite `settings.json` (backed up first). Never run it in
+- ⚠️ Running without `-d` **writes to real editor config dirs** and can
+  overwrite `settings.json` (backed up first). Never run it in
   automated/CI contexts or against machines you don't own unless asked.
 
 ## Conventions & rules for agents
@@ -134,23 +157,27 @@ bash syncode.sh -h | -v    # help / version
 
 ## Pros
 
-- **Zero dependencies** — pure bash 4+, runs anywhere bash exists (Git Bash,
-  WSL, macOS, Linux). The one-liner additionally needs curl (no git).
+- **Zero dependencies** — pure bash 4+ on Linux, built-in cmdlets only on
+  Windows PowerShell. The one-liners need curl (Linux) or nothing extra
+  (Windows).
 - **Idempotent & safe** — double-run is a no-op; settings are backed up to
   `.bak` before overwrite; user-installed extensions are never touched.
-- **Two small files** — the whole tool is `syncode.sh` (441 lines) plus a
-  ~30-line `install.sh` runner, with no build/install step.
+- **Four small files** — `syncode.sh` (~400 lines) + `install.sh` runner on
+  Linux, `syncode.ps1` + `install.ps1` on Windows, no build/install step.
+- **Native per platform** — bash on Linux, PowerShell on Windows; no
+  Git Bash, WSL, or cross-shell shims.
 - **Cross-fork** — one config drives VS Code, VSCodium, Cursor, Windsurf,
   and Positron.
 - **Dry-run & revert** built in, so it's auditable and undoable.
-- Parallel editor detection keeps startup fast.
+- Parallel editor detection keeps startup fast (bash version).
 
 ## Cons / gotchas
 
-- **macOS ships bash 3.2** — script refuses to run (`bash 4+` guard) until
-  the user installs bash via Homebrew. This is the #1 user friction point.
-- **WSL only syncs Windows installs** — it resolves Windows AppData and
-  ignores Linux-native editor installs under WSL.
+- **Two implementations to keep in lockstep** — the bash and PowerShell
+  ports must stay feature-identical (same flags, output, version string).
+  Change both in the same commit.
+- **macOS unsupported** — `syncode.sh` is Linux-only by design; macOS users
+  get the Linux tool only via bash if they install a bash 4+.
 - **No JSON parser** — `extensions.json` parsing is regex-based; silently
   wrong if the format drifts (see conventions above).
 - **Proprietary extensions can't be synced** — anything not on Open VSX

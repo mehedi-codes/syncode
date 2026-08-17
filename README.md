@@ -25,30 +25,51 @@ time to bring an editor back in sync.
 | Windsurf | `Windsurf` |
 | Positron | `Positron` |
 
-Works on **Windows (Git Bash or WSL)**, **macOS**, and **Linux**. Platforms
-are detected automatically via `$OSTYPE`; under WSL, syncode targets your
-**Windows** editor installs.
+Two implementations, one per platform:
+
+| Platform | Tooling |
+| --- | --- |
+| **Linux** | `syncode.sh` + `install.sh` (bash 4+) |
+| **Windows** | `syncode.ps1` + `install.ps1` (PowerShell) |
 
 ## Install
 
-One-time runner — fetches the latest `syncode.sh` + config with **curl**
-(no git, no cache) and runs it from a temp dir. Needs bash 4+ and curl:
+One-time runner — fetches the latest tool + config (no git, no cache) and
+runs it from a temp dir.
+
+**Linux** (needs bash 4+ and curl):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o /tmp/syncode-install.sh && bash /tmp/syncode-install.sh
+curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o syncode-install.sh && bash syncode-install.sh
 ```
 
-Flags pass through to `syncode.sh` (`-d`, `-r`, `-v`, `-h`), e.g.
-`bash /tmp/syncode-install.sh -d` for a dry-run.
+**Windows** (PowerShell; needs no curl — uses `Invoke-RestMethod`):
+
+```powershell
+irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile install.ps1; .\install.ps1
+```
+
+Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`), e.g.
+`bash syncode-install.sh -d` or `.\install.ps1 -d` for a dry-run.
 
 Prefer cloning? The repo runs directly too — see [Usage](#usage).
 
 ## Usage
 
+**Linux:**
+
 ```bash
 bash syncode.sh            # detect → plan → select → confirm → apply
 bash syncode.sh -d         # preview the plan, change nothing
 bash syncode.sh -r         # restore editors to factory defaults
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\syncode.ps1              # detect → plan → select → confirm → apply
+.\syncode.ps1 -d           # preview the plan, change nothing
+.\syncode.ps1 -r           # restore editors to factory defaults
 ```
 
 ### Options
@@ -91,6 +112,11 @@ bash syncode.sh -r           # interactive selection, then confirm
 bash syncode.sh -r -d        # plan for all editor families, apply nothing
 ```
 
+```powershell
+.\syncode.ps1 -r             # interactive selection, then confirm
+.\syncode.ps1 -r -d          # plan for all editor families, apply nothing
+```
+
 For each selected editor, revert:
 
 1. Restores `settings.json.bak` → `settings.json` if a backup exists,
@@ -101,8 +127,10 @@ For each selected editor, revert:
 ## Files
 
 ```
-install.sh        one-time runner (curl-fetches syncode.sh + config)
-syncode.sh        the deploy script
+install.sh        one-time runner (Linux: curl-fetches syncode.sh + config)
+syncode.sh        the deploy script (Linux, bash)
+install.ps1       one-time runner (Windows: Invoke-WebRequest fetches + runs)
+syncode.ps1       the deploy script (Windows, PowerShell)
 settings.json     your editor settings (applied to every editor)
 extensions.json   extension IDs (installed when missing)
 extensions.md     usage guides for every managed extension
@@ -110,9 +138,8 @@ extensions.md     usage guides for every managed extension
 
 ## Notes
 
-- Requires **bash 4+** — on Windows, Git Bash or WSL (run from within the repo
-  or call by absolute path). macOS ships bash 3.2 by default; install a newer
-  bash via Homebrew (`brew install bash`) and use it to run syncode.
+- **Linux** needs **bash 4+** and curl; **Windows** needs **PowerShell**
+  (5.1 or 7+; no curl required).
 - Extensions are installed from the marketplace your editor uses (e.g.
   Open VSX for VSCodium). Proprietary extensions (GitHub Copilot) that have
   no marketplace equivalent will fail to install — syncode reports the
