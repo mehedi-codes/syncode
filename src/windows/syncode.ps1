@@ -30,6 +30,13 @@ $BANNER = @'
 # Script directory (install.ps1 runs this from a temp dir with the configs beside it)
 $SCRIPT_DIR = $PSScriptRoot
 
+# Config dir: beside the script (install temp dir) or ..\shared (repo checkout)
+if ((Test-Path (Join-Path $SCRIPT_DIR "settings.json")) -and (Test-Path (Join-Path $SCRIPT_DIR "extensions.json"))) {
+    $CONFIG_DIR = $SCRIPT_DIR
+} else {
+    $CONFIG_DIR = Join-Path $SCRIPT_DIR "..\shared"
+}
+
 function Write-LogInfo  { Write-Host "[INFO ] $args" }
 function Write-LogWarn  { Write-Warning $args }
 function Write-LogError { Write-Error $args }
@@ -102,7 +109,7 @@ function Test-Fork($fork) {
 # ------------------------------------------------------------
 function Get-ExtIds {
     # extract "publisher.name" entries from extensions.json (regex, like the bash version)
-    $text = [IO.File]::ReadAllText((Join-Path $SCRIPT_DIR "extensions.json"), [Text.Encoding]::UTF8)
+    $text = [IO.File]::ReadAllText((Join-Path $CONFIG_DIR "extensions.json"), [Text.Encoding]::UTF8)
     @([regex]::Matches($text, '"[a-z0-9-]+\.[a-z0-9-]+"')) | ForEach-Object { $_.Value.Trim('"') }
 }
 
@@ -135,7 +142,7 @@ function Test-SameSettings($a, $b) {
 function Get-Plan($fork) {
     $sp = Get-SettingsPath $fork
     $bd = Get-BackupPath $fork
-    $settingsSrc = Join-Path $SCRIPT_DIR "settings.json"
+    $settingsSrc = Join-Path $CONFIG_DIR "settings.json"
 
     if ($Revert) {
         if (Test-Path $bd) { $out = "restore settings.json from .bak" }
@@ -163,7 +170,7 @@ function Get-Plan($fork) {
 function Apply-Fork($fork) {
     $sp = Get-SettingsPath $fork
     $bd = Get-BackupPath $fork
-    $settingsSrc = Join-Path $SCRIPT_DIR "settings.json"
+    $settingsSrc = Join-Path $CONFIG_DIR "settings.json"
 
     New-Item -ItemType Directory -Force -Path (Split-Path $sp) | Out-Null
 

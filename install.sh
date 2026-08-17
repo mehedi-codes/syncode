@@ -8,7 +8,11 @@
 set -Eeuo pipefail
 
 REPO_RAW="https://raw.githubusercontent.com/mehedi-codes/syncode/main"
-FILES=(syncode.sh settings.json extensions.json)
+FILES=(
+  "src/linux/syncode.sh:syncode.sh"
+  "src/shared/settings.json:settings.json"
+  "src/shared/extensions.json:extensions.json"
+)
 
 # Guard: curl required (no git involved)
 if ! command -v curl &>/dev/null; then
@@ -25,11 +29,15 @@ fi
 tmp="$(mktemp -d .syncode.XXXXXX)"
 trap 'rm -rf -- "$tmp"' EXIT
 
-# One curl call fetches all files in parallel into the temp dir
-curl -fsSL \
-  -o "$tmp/syncode.sh"      "$REPO_RAW/syncode.sh" \
-  -o "$tmp/settings.json"   "$REPO_RAW/settings.json" \
-  -o "$tmp/extensions.json" "$REPO_RAW/extensions.json"
+# One curl call fetches all files in parallel into the temp dir (flattened:
+# syncode.sh expects configs beside it)
+curl_args=()
+for entry in "${FILES[@]}"; do
+  src="${entry%%:*}"
+  dst="${entry##*:}"
+  curl_args+=(-o "$tmp/$dst" "$REPO_RAW/$src")
+done
+curl -fsSL "${curl_args[@]}"
 
 # Run with the real terminal attached (stdin inherited — prompts work).
 # Not exec: the EXIT trap below must fire to clean up the temp dir.

@@ -17,13 +17,13 @@ four scripts (two bash, two PowerShell); everything else is data or docs.
 
 | File | Role |
 | --- | --- |
-| `install.sh` | Linux one-time runner: curl-fetches `syncode.sh` + configs into a temp dir and runs them. Requires curl. |
-| `syncode.sh` | The whole Linux tool (~400 lines, bash). Everything else is data or docs. |
-| `install.ps1` | Windows one-time runner: `Invoke-WebRequest` fetches `syncode.ps1` + configs into a temp dir and runs them. |
-| `syncode.ps1` | The whole Windows tool (PowerShell). |
-| `settings.json` | Source-of-truth editor settings (JSONC). Applied to every selected editor. |
-| `extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
-| `extensions.md` | Usage guides for every extension listed in `extensions.json`. |
+| `install.sh` | Linux one-time runner (root): curl-fetches `src/linux/syncode.sh` + configs into a temp dir and runs them. Requires curl. |
+| `install.ps1` | Windows one-time runner (root): `Invoke-WebRequest` fetches `src/windows/syncode.ps1` + configs into a temp dir and runs them. |
+| `src/linux/syncode.sh` | The whole Linux tool (~400 lines, bash). |
+| `src/windows/syncode.ps1` | The whole Windows tool (PowerShell). |
+| `src/shared/settings.json` | Source-of-truth editor settings (JSONC). Applied to every selected editor. |
+| `src/shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
+| `src/shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
 | `README.md` | User-facing docs. Keep in sync if CLI behavior changes. |
 
 ## Technology
@@ -89,34 +89,36 @@ Per selected editor: restore `settings.json.bak` → `settings.json` (or delete
 # Linux (no git, no cache — curl-fetches latest + runs from a temp dir)
 curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o syncode-install.sh && bash syncode-install.sh
 
-bash syncode.sh            # apply (interactive selection when >1 editor)
-bash syncode.sh -d         # dry-run: plan only, changes nothing — safe to run anywhere
-bash syncode.sh -r         # revert to factory defaults
-bash syncode.sh -r -d      # revert plan only
-bash syncode.sh -h | -v    # help / version
+bash src/linux/syncode.sh   # apply (interactive selection when >1 editor)
+bash src/linux/syncode.sh -d   # dry-run: plan only, changes nothing — safe to run anywhere
+bash src/linux/syncode.sh -r   # revert to factory defaults
+bash src/linux/syncode.sh -r -d  # revert plan only
+bash src/linux/syncode.sh -h | -v  # help / version
 ```
 
 ```powershell
 # Windows (irm fetches latest + runs from a temp dir)
 irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile install.ps1; .\install.ps1
 
-.\syncode.ps1             # apply (interactive selection when >1 editor)
-.\syncode.ps1 -d          # dry-run: plan only, changes nothing
-.\syncode.ps1 -r          # revert to factory defaults
-.\syncode.ps1 -r -d       # revert plan only
-.\syncode.ps1 -h | -v     # help / version
+.\src\windows\syncode.ps1    # apply (interactive selection when >1 editor)
+.\src\windows\syncode.ps1 -d # dry-run: plan only, changes nothing
+.\src\windows\syncode.ps1 -r # revert to factory defaults
+.\src\windows\syncode.ps1 -r -d  # revert plan only
+.\src\windows\syncode.ps1 -h | -v  # help / version
 ```
 
 `install.sh`/`install.ps1` pass flags through to the tool (e.g. `-d` for a
-dry-run).
+dry-run). The tools resolve `settings.json`/`extensions.json` beside the
+script (install temp dir) or from `../shared` (checkout).
 
 **Testing / verification without touching a real machine:**
 
-- Linux: `bash -n syncode.sh` — syntax check; `bash syncode.sh -d` — dry run.
-- Windows: run `syncode.ps1 -d` in pwsh; `powershell.exe -File syncode.ps1 -d`
-  for the 5.1 path. Parse check:
-  `[System.Management.Automation.Language.Parser]::ParseFile('syncode.ps1',[ref]$null,[ref]$err)`.
-- `shellcheck syncode.sh` if available (not a repo dependency).
+- Linux: `bash -n src/linux/syncode.sh` — syntax check;
+  `bash src/linux/syncode.sh -d` — dry run.
+- Windows: run `src/windows/syncode.ps1 -d` in pwsh;
+  `powershell.exe -File src/windows/syncode.ps1 -d` for the 5.1 path. Parse
+  check: `[System.Management.Automation.Language.Parser]::ParseFile('src/windows/syncode.ps1',[ref]$null,[ref]$err)`.
+- `shellcheck src/linux/syncode.sh` if available (not a repo dependency).
 - ⚠️ Running without `-d` **writes to real editor config dirs** and can
   overwrite `settings.json` (backed up first). Never run it in
   automated/CI contexts or against machines you don't own unless asked.

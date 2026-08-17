@@ -37,6 +37,13 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
 
+# Config dir: beside the script (install temp dir) or ../shared (repo checkout)
+if [[ -f "$SCRIPT_DIR/settings.json" && -f "$SCRIPT_DIR/extensions.json" ]]; then
+  CONFIG_DIR="$SCRIPT_DIR"
+else
+  CONFIG_DIR="$(cd -- "$SCRIPT_DIR/../shared" && pwd -P)"
+fi
+
 # ------------------------------------------------------------
 #  Structured logging (stderr)
 # ------------------------------------------------------------
@@ -186,7 +193,7 @@ trap cleanup EXIT
 # ------------------------------------------------------------
 ext_ids() {
   # extract "publisher.name" entries from extensions.json
-  grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"' "$SCRIPT_DIR/extensions.json" | tr -d '"'
+  grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"' "$CONFIG_DIR/extensions.json" | tr -d '"'
 }
 
 installed_exts() {
@@ -232,7 +239,7 @@ plan_fork() {
     local sp bd
     sp="$(settings_path "$fork")"
     bd="$(backup_path "$fork")"
-    if [[ -f "$sp" ]] && cmp -s "$sp" "$SCRIPT_DIR/settings.json"; then
+    if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
       out="settings already in sync"
     else
       out="copy settings (backup -> .bak)"
@@ -272,11 +279,11 @@ apply_fork() {
       echo "    $fork: no settings.json to revert"
     fi
   else
-    if [[ -f "$sp" ]] && cmp -s "$sp" "$SCRIPT_DIR/settings.json"; then
+    if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
       echo "    $fork: settings already in sync"
     else
       [[ -f "$sp" ]] && cp -- "$sp" "$bd"
-      cp -- "$SCRIPT_DIR/settings.json" "$sp"
+      cp -- "$CONFIG_DIR/settings.json" "$sp"
       echo "    $fork: settings copied (backup -> .bak)"
     fi
   fi

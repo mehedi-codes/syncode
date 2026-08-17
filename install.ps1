@@ -14,7 +14,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 $REPO_RAW = "https://raw.githubusercontent.com/mehedi-codes/syncode/main"
-$FILES = @("syncode.ps1", "settings.json", "extensions.json")
+# src-path -> flat dst (syncode.ps1 expects configs beside it in the temp dir)
+$FILES = @(
+    @{ Src = "src/windows/syncode.ps1";      Dst = "syncode.ps1" },
+    @{ Src = "src/shared/settings.json";     Dst = "settings.json" },
+    @{ Src = "src/shared/extensions.json";   Dst = "extensions.json" }
+)
 
 # TLS 1.2+ required for GitHub on Windows PowerShell 5.1 (defaults to TLS 1.0)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -24,7 +29,7 @@ New-Item -ItemType Directory -Path $tmp | Out-Null
 
 try {
     foreach ($f in $FILES) {
-        Invoke-WebRequest -Uri "$REPO_RAW/$f" -OutFile (Join-Path $tmp $f) -UseBasicParsing
+        Invoke-WebRequest -Uri "$REPO_RAW/$($f.Src)" -OutFile (Join-Path $tmp $f.Dst) -UseBasicParsing
     }
 
     # pass flags through to syncode.ps1

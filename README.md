@@ -59,17 +59,17 @@ Prefer cloning? The repo runs directly too — see [Usage](#usage).
 **Linux:**
 
 ```bash
-bash syncode.sh            # detect → plan → select → confirm → apply
-bash syncode.sh -d         # preview the plan, change nothing
-bash syncode.sh -r         # restore editors to factory defaults
+bash src/linux/syncode.sh     # detect → plan → select → confirm → apply
+bash src/linux/syncode.sh -d  # preview the plan, change nothing
+bash src/linux/syncode.sh -r  # restore editors to factory defaults
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-.\syncode.ps1              # detect → plan → select → confirm → apply
-.\syncode.ps1 -d           # preview the plan, change nothing
-.\syncode.ps1 -r           # restore editors to factory defaults
+.\src\windows\syncode.ps1    # detect → plan → select → confirm → apply
+.\src\windows\syncode.ps1 -d # preview the plan, change nothing
+.\src\windows\syncode.ps1 -r # restore editors to factory defaults
 ```
 
 ### Options
@@ -108,13 +108,13 @@ bash syncode.sh -r         # restore editors to factory defaults
 ## Reverting (factory defaults)
 
 ```bash
-bash syncode.sh -r           # interactive selection, then confirm
-bash syncode.sh -r -d        # plan for all editor families, apply nothing
+bash src/linux/syncode.sh -r      # interactive selection, then confirm
+bash src/linux/syncode.sh -r -d   # plan for all editor families, apply nothing
 ```
 
 ```powershell
-.\syncode.ps1 -r             # interactive selection, then confirm
-.\syncode.ps1 -r -d          # plan for all editor families, apply nothing
+.\src\windows\syncode.ps1 -r      # interactive selection, then confirm
+.\src\windows\syncode.ps1 -r -d   # plan for all editor families, apply nothing
 ```
 
 For each selected editor, revert:
@@ -127,13 +127,13 @@ For each selected editor, revert:
 ## Files
 
 ```
-install.sh        one-time runner (Linux: curl-fetches syncode.sh + config)
-syncode.sh        the deploy script (Linux, bash)
-install.ps1       one-time runner (Windows: Invoke-WebRequest fetches + runs)
-syncode.ps1       the deploy script (Windows, PowerShell)
-settings.json     your editor settings (applied to every editor)
-extensions.json   extension IDs (installed when missing)
-extensions.md     usage guides for every managed extension
+install.sh        one-time runner (root — curl-fetches tool + configs)
+install.ps1       one-time runner (root — irm/Invoke-WebRequest fetches + runs)
+src/linux/        syncode.sh — the Linux deploy script (bash)
+src/windows/      syncode.ps1 — the Windows deploy script (PowerShell)
+src/shared/       settings.json + extensions.json + extensions.md
+                  (shared by both platforms; configs are found via ../shared
+                  from a checkout, or beside the script in the install temp dir)
 ```
 
 ## Notes
