@@ -63,12 +63,15 @@ One row per editor, 4 columns:
   dir).
 - `latest`: live lookup (parallel, with timeout); `unknown` if unreachable.
   Not blocking — dashboard renders, column fills when the call returns.
+  Timeout: **10s per lookup** (curl `--max-time 10` /
+  `Invoke-WebRequest -TimeoutSec 10`).
   **Session cache:** `latest` is fetched at most once per session, then reused
   on every dashboard re-render; it is re-fetched only after an `install` or
   `update` action completes (installed version just changed, so the gap
   matters). Without this, a 6-action session would fire 12+ HTTP calls.
 - `settings`: `synced` / `diverged` / `—` (no `settings.json`). Uses existing
-  `Test-SameSettings` hash comparison.
+  `Test-SameSettings` hash comparison — byte-for-byte, so a formatting/whitespace
+  difference in the config counts as `diverged` (intentional: it *is* drift).
 - `extensions`: `up to date` / `N missing` / `none installed` / `n/a` (no CLI
   on PATH or known install path — see CLI resolution below).
 
@@ -84,6 +87,21 @@ Columns reflect live state on every dashboard render, including after actions.
 | reset | restore factory defaults (revert flow) | type "reset" |
 | uninstall | remove editor + config dir | type "uninstall" |
 | help | one-line explanation of each action, back to menu | — |
+
+Installer download/execute details (silent flags, temp dir, wait-for-exit,
+post-install path detection) are specified in the prior spec
+`2026-08-17-install-update-uninstall-editors-design.md` and are reused
+unchanged by the `install`/`update` actions here.
+
+`help` content (fixed, identical in both ports):
+
+```
+install    install latest stable if not installed
+update     upgrade if installed version is older than latest
+config     copy settings (backup .bak) + install missing extensions
+reset      restore factory defaults  (type "reset" to confirm)
+uninstall  remove editor and its config dir  (type "uninstall" to confirm)
+```
 
 No auto-sync after install: install hands back to the dashboard; user runs
 `config` explicitly.
@@ -175,6 +193,14 @@ src/
 - **Comparator duplicated in both ports** (~10-line pure function, segment-wise,
   tolerant of differing segment counts e.g. `1.126.04524` vs `1.133.0`).
   Logic can't be shared across bash/PowerShell; data is what gets single-sourced.
+
+Comparator algorithm (same in both ports):
+
+1. Split both versions on `.`, parse each segment as integer.
+2. Compare segment-by-segment up to the shorter length.
+3. If equal so far, the longer version wins (more segments = newer).
+4. Returns `-1` (a < b) / `0` (equal) / `1` (a > b).
+   `1.10.0` > `1.9.0` (integer segments, not string sort).
 - Detect/plan/apply stay in the entry script (not churning cold code).
 
 ## Version detection
