@@ -116,14 +116,16 @@ function Get-ExtIds {
 function Get-InstalledExts($fork) {
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
     if (-not $cli) { return @() }
-    @(& $cli.Source --list-extensions 2>$null | Where-Object { $_ })
+    # $null | closes stdin on the native CLI so it can't eat interactive input;
+    # .Trim() strips the trailing CR from Windows CRLF output
+    @($null | & $cli.Source --list-extensions 2>$null | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 }
 
 function Get-EditorVersion($fork) {
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
     if (-not $cli) { return "n/a" }
-    $v = & $cli.Source --version 2>$null | Select-Object -First 1
-    if ($v) { return $v } else { return "n/a" }
+    $v = $null | & $cli.Source --version 2>$null | Select-Object -First 1
+    if ($v) { return $v.Trim() } else { return "n/a" }
 }
 
 function Get-MissingExts($fork) {
@@ -134,6 +136,13 @@ function Get-MissingExts($fork) {
 function Test-SameSettings($a, $b) {
     if (-not (Test-Path $a) -or -not (Test-Path $b)) { return $false }
     return (Get-FileHash $a).Hash -eq (Get-FileHash $b).Hash
+}
+
+# Prompt reader. [Console]::In.ReadLine() (not Read-Host) so piped/redirected
+# stdin works too; returns $null on EOF (matches bash "read || ans=n").
+function Read-Line($prompt) {
+    Write-Host -NoNewline $prompt
+    return [Console]::In.ReadLine()
 }
 
 # ------------------------------------------------------------
@@ -200,13 +209,13 @@ function Apply-Fork($fork) {
         if ($Revert) {
             foreach ($id in @(Get-ExtIds)) {
                 if (@(Get-InstalledExts $fork) -contains $id) {
-                    & $cli.Source --uninstall-extension $id 2>$null | Out-Null
+                    $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
                     Write-Output "    ${fork}: uninstalled $id"
                 }
             }
         } else {
             foreach ($id in @(Get-MissingExts $fork)) {
-                & $cli.Source --install-extension $id --force 2>$null | Out-Null
+                $null | & $cli.Source --install-extension $id --force 2>$null | Out-Null
                 if ($LASTEXITCODE -eq 0) { Write-Output "    ${fork}: installed $id" }
                 else                     { Write-LogWarn "${fork}: FAILED to install $id" }
             }
@@ -257,16 +266,17 @@ if (-not $DryRun -and $detected.Count -gt 1) {
             "  {0}) [{1}] {2}" -f ($i + 1), $mark, $detected[$i]
         }
         Write-Output "  a) select all     n) select none     <enter> = apply checked"
-        $input = (Read-Host "toggle (e.g. 1 3), a=all, n=none, enter=apply").Trim()
+        $line = Read-Line "toggle (e.g. 1 3), a=all, n=none, enter=apply "
+        $choice = if ($null -eq $line) { "" } else { $line.Trim() }
 
-        switch ($input) {
+        switch ($choice) {
             ""  { break menu }
             "a" { foreach ($f in $detected) { $checked[$f] = $true } }
             "A" { foreach ($f in $detected) { $checked[$f] = $true } }
             "n" { foreach ($f in $detected) { $checked[$f] = $false } }
             "N" { foreach ($f in $detected) { $checked[$f] = $false } }
             default {
-                foreach ($tok in ($input -split "\s+")) {
+                foreach ($tok in ($choice -split "\s+")) {
                     if ($tok -match "^\d+$") {
                         $num = [int]$tok
                         if ($num -ge 1 -and $num -le $detected.Count) {
@@ -298,7 +308,8 @@ if ($selected.Count -eq 0) {
 }
 
 Write-Output ""
-$ans = (Read-Host "Apply? [Y/n]").Trim()
+$line = Read-Line "Apply? [Y/n] "
+$ans = if ($null -eq $line) { "n" } else { $line.Trim() }
 if ($ans -match "^n") { Write-Output "aborted."; exit 0 }
 
 Write-Output ""
