@@ -46,9 +46,9 @@ four scripts (two bash, two PowerShell); everything else is data or docs.
 
 Flow: `detect → plan → select → confirm → apply`.
 
-1. **Detect** (`detect_forks`): checks each of `code codium cursor windsurf
-   positron` on PATH or by its config directory, in parallel background jobs.
-2. **Plan** (`plan_fork`): prints name/version/status table for all 5 forks,
+1. **Detect** (`detect_forks`): checks each of `code codium` on PATH or by its
+   config directory, in parallel background jobs.
+2. **Plan** (`plan_fork`): prints name/version/status table for all 2 forks,
    marking not-installed ones.
 3. **Select**: interactive toggle menu only when >1 editor detected
    (numbers toggle, `a`=all, `n`=none, Enter=apply). Skipped in dry-run.
@@ -74,8 +74,7 @@ piped editor CLI ate the buffered answer). Keep this discipline for new
 subprocess calls. The PowerShell port has the same concern: native CLI calls
 get `$null |` piped in to close stdin, and prompts read via `[Console]::In`.
 
-`FORK_DIR` maps fork → config dir name (`Code`, `VSCodium`, `Cursor`,
-`Windsurf`, `Positron`).
+`FORK_DIR` maps fork → config dir name (`Code`, `VSCodium`).
 
 ### Revert mode (`-r`)
 
@@ -168,8 +167,7 @@ script (install temp dir) or from `../shared` (checkout).
   Linux, `syncode.ps1` + `install.ps1` on Windows, no build/install step.
 - **Native per platform** — bash on Linux, PowerShell on Windows; no
   Git Bash, WSL, or cross-shell shims.
-- **Cross-fork** — one config drives VS Code, VSCodium, Cursor, Windsurf,
-  and Positron.
+- **Cross-fork** — one config drives VS Code and VSCodium.
 - **Dry-run & revert** built in, so it's auditable and undoable.
 - Parallel editor detection keeps startup fast (bash version).
 

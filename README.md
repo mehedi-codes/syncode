@@ -21,9 +21,6 @@ time to bring an editor back in sync.
 | --- | --- |
 | VS Code | `Code` |
 | VSCodium | `VSCodium` |
-| Cursor | `Cursor` |
-| Windsurf | `Windsurf` |
-| Positron | `Positron` |
 
 Two implementations, one per platform:
 
@@ -83,8 +80,8 @@ bash src/linux/syncode.sh -r  # restore editors to factory defaults
 
 ## What it does
 
-1. **Detect** — checks for `code`, `codium`, `cursor`, `windsurf`, `positron`
-   on PATH or by config directory (in parallel).
+1. **Detect** — checks for `code`, `codium` on PATH or by config directory
+   (in parallel).
 2. **Plan** — prints a table (name / version / status) for all editor
    families, marking not-installed ones.
 3. **Select** — when multiple editors are found, a toggle menu lets you pick

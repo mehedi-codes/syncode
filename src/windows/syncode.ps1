@@ -1,7 +1,7 @@
 # ============================================================
 #  syncode.ps1 - sync your editor setup to every VS Code-family
 #  editor. Windows / PowerShell version (Windows only).
-#  Version: 1.0.0
+#  Version: 1.1.0
 # ============================================================
 param(
     [Alias('h')][switch]$Help,
@@ -12,7 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$VERSION_STR = "1.0.0"
+$VERSION_STR = "1.1.0"
 $TOOL_NAME = "syncode"
 $DESCRIPTION = "sync your editor setup to every VS Code-family editor"
 
@@ -62,7 +62,7 @@ OPTIONS:
                     without -d: interactive selection like apply.
 
 WHAT IT DOES:
-    Detects installed editors (VS Code, VSCodium, Cursor, Windsurf, Positron),
+    Detects installed editors (VS Code, VSCodium),
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected.
@@ -86,11 +86,8 @@ $DATA_ROOT = if ($env:APPDATA) { $env:APPDATA } else { Join-Path $HOME "AppData\
 $FORK_DIR = @{
     code      = "Code"
     codium    = "VSCodium"
-    cursor    = "Cursor"
-    windsurf  = "Windsurf"
-    positron  = "Positron"
 }
-$FORK_ORDER = @("code", "codium", "cursor", "windsurf", "positron")
+$FORK_ORDER = @("code", "codium")
 
 function Get-SettingsPath($fork) { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User\settings.json" }
 function Get-BackupPath($fork)   { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User\settings.json.bak" }

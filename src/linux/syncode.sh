@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
 #  syncode — sync your editor setup to every VS Code-family editor
-#  Version: 1.0.0
+#  Version: 1.1.0
 # ============================================================
 set -Eeuo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 TOOL_NAME="syncode"
 DESCRIPTION="sync your editor setup to every VS Code-family editor"
 
@@ -78,7 +78,7 @@ OPTIONS:
                     without -d: interactive selection like apply.
 
 WHAT IT DOES:
-    Detects installed editors (VS Code, VSCodium, Cursor, Windsurf, Positron),
+    Detects installed editors (VS Code, VSCodium),
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected.
@@ -131,11 +131,8 @@ esac
 declare -A FORK_DIR=(
   [code]="Code"
   [codium]="VSCodium"
-  [cursor]="Cursor"
-  [windsurf]="Windsurf"
-  [positron]="Positron"
 )
-FORK_ORDER=(code codium cursor windsurf positron)
+FORK_ORDER=(code codium)
 
 settings_path() { printf '%s/%s/User/settings.json\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
 backup_path()   { printf '%s/%s/User/settings.json.bak\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
