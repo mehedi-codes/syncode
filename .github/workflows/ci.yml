@@ -9,7 +9,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: bash syntax check
         run: bash -n linux/syncode.sh linux/version.sh linux/release.sh install.sh
@@ -75,23 +75,15 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: parse check (pwsh 7)
+      - name: parse check (pwsh 7) + ASCII-only source
         shell: pwsh
-        run: |
-          $err = $null
-          [void][System.Management.Automation.Language.Parser]::ParseFile('windows/syncode.ps1', [ref]$null, [ref]$err)
-          if ($err.Count) { $err | ForEach-Object { $_.Message }; exit 1 }
-          $err = $null
-          [void][System.Management.Automation.Language.Parser]::ParseFile('windows/release.ps1', [ref]$null, [ref]$err)
-          if ($err.Count) { $err | ForEach-Object { $_.Message }; exit 1 }
+        run: pwsh -NoProfile -File .github/scripts/ps-parse-check.ps1
 
       - name: parse check (5.1) + ASCII-only source
         shell: pwsh
-        run: |
-          & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "$t=`$null;$e=`$null;[void][System.Management.Automation.Language.Parser]::ParseFile('windows\syncode.ps1',[ref]`$t,[ref]`$e);if(`$e.Count){`$e|ForEach-Object{Write-Host `$_.Message};exit 1};[void][System.Management.Automation.Language.Parser]::ParseFile('windows\release.ps1',[ref]`$t,[ref]`$e);if(`$e.Count){`$e|ForEach-Object{Write-Host `$_.Message};exit 1}"
-          if (Get-ChildItem windows/*.ps1 | Select-String -Pattern '[^\x00-\x7F]') { Write-Error "non-ASCII in ps1 source (breaks 5.1)"; exit 1 }
+        run: '& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File .github/scripts/ps-parse-check.ps1'
 
       - name: sandbox dry-run (5.1, checkout layout)
         shell: pwsh
