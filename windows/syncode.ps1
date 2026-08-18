@@ -399,6 +399,7 @@ function Resolve-Cli($fork) {
 
 # Show-ListVersions - -l / --list-versions table
 function Show-ListVersions {
+    Write-Output ""
     "{0,-10} {1,-12} {2}" -f "name", "installed", "latest"
     foreach ($f in $FORK_ORDER) {
         $inst = Get-InstalledVersion $f
@@ -737,7 +738,6 @@ Write-Output ""
 Write-Output $BANNER
 Write-Output ""
 Write-Output "$TOOL_NAME v$VERSION_STR - $DESCRIPTION"
-Write-Output ""
 
 # action flags take priority (list-versions / install / uninstall)
 $action = ""
@@ -759,6 +759,7 @@ if ($action) {
         exit 0
     }
     if ($DryRun) {
+        Write-Output ""
         "{0,-10} {1,-12} {2,-12} {3}" -f "name", "installed", "latest", "action"
         foreach ($f in $actionForks) {
             $inst = Get-InstalledVersion $f

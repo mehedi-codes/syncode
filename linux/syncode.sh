@@ -124,7 +124,7 @@ done
 # ------------------------------------------------------------
 banner() {
   printf '\n%s\n\n' "$BANNER"
-  printf '%s v%s - %s\n\n' "$TOOL_NAME" "$VERSION" "$DESCRIPTION"
+  printf '%s v%s - %s\n' "$TOOL_NAME" "$VERSION" "$DESCRIPTION"
 }
 
 # ------------------------------------------------------------
@@ -390,6 +390,7 @@ resolve_cli() {
 
 # show_list_versions - -l / --list-versions table
 show_list_versions() {
+  echo ""
   printf '  %-10s %-12s %s\n' name installed latest
   local f inst
   for f in "${FORK_ORDER[@]}"; do
@@ -784,6 +785,7 @@ if [[ -n "$ACTION" ]]; then
     exit 0
   fi
   if [[ "$DRY_RUN" == true ]]; then
+    echo ""
     printf '  %-10s %-12s %-12s %s\n' name installed latest action
     f=""; inst=""; latest=""; desc=""
     for f in "${local_action_forks[@]}"; do
