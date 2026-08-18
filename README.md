@@ -14,7 +14,7 @@
 detects which editors are installed, shows you a plan, and — with
 your confirmation — copies `settings.json` and installs the extensions listed
 in `extensions.json`. Run it once to set up a new machine, or re-run it any
-time to bring an editor back in sync. It can also install, update, or
+time to bring an editor back in sync. It can also install or
 uninstall the editors themselves.
 
 ## Supported editors
@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.s
 $p="$env:temp\s.ps1";irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile $p;& $p
 ```
 
-Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-u`, `-rm`),
+Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-rm`),
 e.g. append `-d` to the Windows one-liner (`...; & $p -d`) for a dry-run.
 Prefer cloning? The repo runs directly too — see [Usage](#usage).
 
@@ -63,7 +63,6 @@ bash linux/syncode.sh -r     # restore editors to factory defaults
 bash linux/syncode.sh -l     # show installed vs latest versions
 bash linux/syncode.sh -i     # install latest stable for all editors
 bash linux/syncode.sh -i codium   # install just VSCodium
-bash linux/syncode.sh -u     # update all editors to latest
 bash linux/syncode.sh -rm    # uninstall all editors + config dirs
 ```
 
@@ -76,7 +75,6 @@ bash linux/syncode.sh -rm    # uninstall all editors + config dirs
 .\windows\syncode.ps1 -l     # show installed vs latest versions
 .\windows\syncode.ps1 -i     # install latest stable for all editors
 .\windows\syncode.ps1 -i codium       # install just VSCodium
-.\windows\syncode.ps1 -u     # update all editors to latest
 .\windows\syncode.ps1 -rm    # uninstall all editors + config dirs
 ```
 
@@ -88,8 +86,7 @@ bash linux/syncode.sh -rm    # uninstall all editors + config dirs
 | `-v`, `--version` | Show version and exit |
 | `-d`, `--dry-run` | Show the plan for all editor families, apply nothing |
 | `-r`, `--revert` | Restore editors to factory defaults (see below) |
-| `-i`, `--install [fork]` | Install latest stable. Bare `-i` = all editors; `-i codium` = one fork (same for `-u`, `-rm`) |
-| `-u`, `--update [fork]` | Upgrade if the installed version is older than latest |
+| `-i`, `--install [fork]` | Install latest stable. Bare `-i` = all editors; `-i codium` = one fork (same for `-rm`) |
 | `-rm`, `--uninstall [fork]` | Remove the editor and its config dir |
 | `-l`, `--list-versions` | Show installed vs latest versions, then exit |
 
@@ -107,13 +104,13 @@ Run with no flags to get a live dashboard instead of the one-shot plan:
   codium   1.126.04524  1.126.04524 diverged  1 missing
 
   pick editor (1=code 2=codium, q=quit)
-  action for code (install/update/config/reset/uninstall/help, q=quit)
+  action for code (install/config/reset/uninstall/help, q=quit)
 ```
 
 Each row shows installed vs latest version (fetched live from the official
 release APIs, cached per session), whether settings are in sync, and the
 missing-extension count. Pick an editor, then an action — `config` syncs
-settings + extensions, `install`/`update`/`uninstall` manage the editor
+settings + extensions, `install`/`uninstall` manage the editor
 itself (downloads are written to a `syncode-*` temp file; Windows installs
 run `/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never
 launches on its own). `reset` and `uninstall` require typing the word to
@@ -175,7 +172,7 @@ shared/           settings.json + extensions.json + releases.json + extensions.m
 ```
 
 `releases.json` maps each editor fork to its release API, installer URLs,
-uninstall method, and winget id — it's what powers `-i/-u/-rm/-l` and the
+uninstall method, and winget id — it's what powers `-i/-rm/-l` and the
 dashboard's latest column. Version comparison lives in `version.sh`/`.ps1`;
 release lookups in `release.sh`/`.ps1`. Each module has a self-check that
 runs when executed directly (e.g. `bash linux/release.sh`).

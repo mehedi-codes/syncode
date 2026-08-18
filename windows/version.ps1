@@ -30,8 +30,16 @@ function Get-InstalledVersion($fork) {
     }
     # else resources/app/package.json from known install paths (regex, like the bash port)
     $paths = @{
-        code   = @(Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code")
-        codium = @(Join-Path $env:LOCALAPPDATA "Programs\VSCodium")
+        code   = @(
+            (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code"),
+            (Join-Path ${env:ProgramFiles(x86)} "Microsoft VS Code"),
+            (Join-Path $env:ProgramFiles "Microsoft VS Code")
+        )
+        codium = @(
+            (Join-Path $env:LOCALAPPDATA "Programs\VSCodium"),
+            (Join-Path ${env:ProgramFiles(x86)} "VSCodium"),
+            (Join-Path $env:ProgramFiles "VSCodium")
+        )
     }
     foreach ($p in $paths[$fork]) {
         $pj = Join-Path $p "resources\app\package.json"

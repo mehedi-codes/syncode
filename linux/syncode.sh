@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
 #  syncode - Sync and manage your VS Code and VSCodium editors
-#  Version: 1.2.0
+#  Version: 1.3.0
 # ============================================================
 set -Eeuo pipefail
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 TOOL_NAME="syncode"
 DESCRIPTION="Sync and manage your VS Code and VSCodium editors"
 
@@ -77,7 +77,6 @@ OPTIONS:
                     extensions. With -d: applies to all detected editors;
                     without -d: interactive selection like apply.
     -i, --install [fork]    install latest stable (code/codium; default all)
-    -u, --update [fork]     upgrade if installed version is older than latest
     -rm, --uninstall [fork] remove editor and its config dir
     -l, --list-versions    show installed vs latest versions, then exit
 
@@ -86,7 +85,7 @@ WHAT IT DOES:
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected. With no flags, opens the interactive dashboard
-    (pick editor, then install/update/config/reset/uninstall/help).
+    (pick editor, then install/config/reset/uninstall/help).
 
 EXAMPLES:
     bash $SCRIPT_NAME           apply to selected editors (menu)
@@ -95,7 +94,6 @@ EXAMPLES:
     bash $SCRIPT_NAME -r        restore editors to factory defaults
     bash $SCRIPT_NAME -l        show installed vs latest versions
     bash $SCRIPT_NAME -i codium install latest VSCodium
-    bash $SCRIPT_NAME -u        update all editors
 EOF
   exit "${1:-0}"
 }
@@ -110,8 +108,6 @@ while [[ $# -gt 0 ]]; do
     -d|--dry-run) DRY_RUN=true; shift ;;
     -r|--revert) REVERT=true; shift ;;
     -i|--install) ACTION=install; shift
-      [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
-    -u|--update) ACTION=update; shift
       [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
     -rm|--uninstall) ACTION=uninstall; shift
       [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
@@ -334,7 +330,7 @@ apply_fork() {
 }
 
 # ------------------------------------------------------------
-#  Release-driven actions (install/update/uninstall) + dashboard
+#  Release-driven actions (install/uninstall) + dashboard
 # ------------------------------------------------------------
 source "$SCRIPT_DIR/release.sh"
 source "$SCRIPT_DIR/version.sh"
@@ -422,10 +418,84 @@ render_dashboard() {
   done
 }
 
+# ------------------------------------------------------------
+#  Progress/spinner renderers (download % + indeterminate spinners)
+# ------------------------------------------------------------
+
+# draw_line <label> <name> <pct> <frame> - single \r line: spinner at start, a
+# solid white background block behind the centered temp filename, real % at the
+# end. pct -1 = indeterminate (spinner only, no box). Plain fallback when the
+# terminal is redirected (pipes, CI).
+draw_line() {
+  local label="$1" name="$2" pct="$3" frame="$4"
+  local esc=$'\e' box=44 left right fill on_fill pre after n
+  if [[ "$pct" -lt 0 ]]; then
+    printf '\r%s  %s' "$frame" "$label"
+    return
+  fi
+  if [[ ! -t 1 ]]; then
+    printf '\r%s  %s  %s  %s%%' "$frame" "$label" "$name" "$pct"
+    return
+  fi
+  n=${#name}
+  (( n > box )) && { name="${name: -box}"; n=$box; }
+  left=$(( (box - n) / 2 ))
+  right=$(( left + n ))
+  fill=$(( box * pct / 100 ))
+  (( fill < 0 )) && fill=0
+  (( fill > box )) && fill=box
+  local W="$esc[37m" K="$esc[30m" WB="$esc[47m" R="$esc[0m"
+  printf '\r%s [%s' "$frame" "$R"
+  pre=$(( fill < left ? fill : left ))
+  (( pre > 0 )) && printf '%s%s%*s%s' "$WB" "$W" "$pre" "" "$R"
+  on_fill=$(( fill < right ? fill : right ))
+  (( on_fill -= left ))
+  (( on_fill < 0 )) && on_fill=0
+  (( on_fill > n )) && on_fill=n
+  (( on_fill > 0 )) && printf '%s%s%s%s' "$WB" "$K" "${name:0:on_fill}" "$R"
+  (( n > on_fill )) && printf '%s%s%s' "$W" "${name:on_fill}" "$R"
+  after=$(( fill - right ))
+  (( after > 0 )) && printf '%s%s%*s%s' "$WB" "$W" "$after" "" "$R"
+  printf '%s]  %s%%' "$R" "$pct"
+}
+
+# download_with_progress <fork> <ver> <url> <tmp> - background curl + poll the
+# temp file size against a HEAD Content-Length for a real % line; spinner-only
+# when the server omits Content-Length. Returns 0 on success, 1 on failure.
+download_with_progress() {
+  local fork="$1" ver="$2" url="$3" tmp="$4"
+  local total=0 frames='|/-\' i=0 done=0 pct=-1 pid name label
+  total="$(curl -fsSLI --max-time 30 "${url//<ver>/$ver}" 2>/dev/null \
+    | awk 'tolower($1)=="content-length:"{print $2}' | tr -d '\r' | tail -n1)"
+  [[ "$total" =~ ^[0-9]+$ ]] || total=0
+  name="$(basename -- "$tmp")"
+  label="  $fork: downloading"
+  curl -fsSL --max-time 600 -o "$tmp" "${url//<ver>/$ver}" 2>/dev/null &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [[ "$total" -gt 0 ]]; then
+      done="$(stat -c %s "$tmp" 2>/dev/null || echo 0)"
+      pct=$(( done * 100 / total ))
+    fi
+    draw_line "$label" "$name" "$pct" "${frames:$((i%4)):1}"
+    i=$((i+1))
+    sleep 0.1
+  done
+  if ! wait "$pid"; then
+    printf '\r\033[2K'
+    log_error "$fork: download failed"
+    return 1
+  fi
+  (( pct < 0 )) && pct=0
+  draw_line "$label" "$name" "$pct" " "
+  echo ""
+  return 0
+}
+
 # install_editor <fork> [ver] - download (syncode temp name) + silent install.
 # apt -> .deb, dnf/yum -> .rpm, else tarball -> ~/.local/share/<ForkDir>.
 # "already installed" check lives at the call sites (dashboard / -i flag);
-# update calls straight through so the Inno/pkg installers can upgrade in place.
+# installs are always fresh (no update path - editors self-update).
 install_editor() {
   local fork="$1" ver="$2" url tmp dest
   ver="${ver:-$(latest_for "$fork")}"
@@ -434,18 +504,16 @@ install_editor() {
   if command -v apt-get >/dev/null 2>&1; then
     url="$(release_installer_url "$fork" linux)"
     tmp="$(mktemp --suffix=.deb)"
-    echo "  downloading deb ..."
-    curl -fsSL --max-time 600 -o "$tmp" "${url//<ver>/$ver}" 2>/dev/null \
-      || { log_error "$fork: download failed"; rm -f "$tmp"; return 1; }
+    download_with_progress "$fork" "$ver" "$url" "$tmp" \
+      || { rm -f "$tmp"; return 1; }
     sudo apt-get install -y "$tmp" \
       || { log_error "$fork: install failed"; rm -f "$tmp"; return 1; }
     rm -f "$tmp"
   elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
     url="$(release_installer_url "$fork" linuxRpm)"
     tmp="$(mktemp --suffix=.rpm)"
-    echo "  downloading rpm ..."
-    curl -fsSL --max-time 600 -o "$tmp" "${url//<ver>/$ver}" 2>/dev/null \
-      || { log_error "$fork: download failed"; rm -f "$tmp"; return 1; }
+    download_with_progress "$fork" "$ver" "$url" "$tmp" \
+      || { rm -f "$tmp"; return 1; }
     sudo dnf install -y "$tmp" \
       || { log_error "$fork: install failed"; rm -f "$tmp"; return 1; }
     rm -f "$tmp"
@@ -454,39 +522,13 @@ install_editor() {
     url="$(release_installer_url "$fork" linuxTar)"
     dest="$HOME/.local/share/${FORK_DIR[$fork]}"
     mkdir -p "$dest"
-    echo "  downloading tarball ..."
-    curl -fsSL --max-time 600 -o "$HOME/.cache/syncode-${fork}.tar.gz" "${url//<ver>/$ver}" 2>/dev/null \
-      || { log_error "$fork: download failed"; return 1; }
+    download_with_progress "$fork" "$ver" "$url" "$HOME/.cache/syncode-${fork}.tar.gz" \
+      || return 1
     tar -xzf "$HOME/.cache/syncode-${fork}.tar.gz" -C "$dest" --strip-components=1 \
       || { log_error "$fork: extract failed"; rm -f "$HOME/.cache/syncode-${fork}.tar.gz"; return 1; }
     rm -f "$HOME/.cache/syncode-${fork}.tar.gz"
   fi
   echo "  $fork installed"
-}
-
-# update_editor <fork> - upgrade if installed < latest; no-op if current.
-update_editor() {
-  local fork="$1" inst latest
-  inst="$(get_installed_version "$fork")"
-  latest="$(latest_for "$fork")"
-  if [[ -z "$inst" ]]; then
-    echo "  $fork not installed - use install"
-    return 0
-  fi
-  if [[ "$latest" == "unknown" ]]; then
-    if [[ "${RELEASE_RATE_LIMITED:-0}" == "1" ]]; then
-      log_error "$fork: GitHub API rate limit hit - try later"
-    else
-      log_error "$fork: can't check for updates (network unavailable)"
-    fi
-    return 1
-  fi
-  if [[ "$(version_compare "$inst" "$latest")" -lt 0 ]]; then
-    echo "  $fork: updating $inst -> $latest"
-    install_editor "$fork" "$latest"
-  else
-    echo "  $fork: already latest ($inst)"
-  fi
 }
 
 # uninstall_editor <fork> - pkg manager remove + config dir; tarball -> rm -rf.
@@ -522,19 +564,18 @@ run_dashboard() {
       *) echo "invalid: $line"; continue ;;
     esac
     while true; do
-      read -r -p "action for $editor (install/update/config/reset/uninstall/help, q=quit): " action \
+      read -r -p "action for $editor (install/config/reset/uninstall/help, q=quit): " action \
         || action="q"
       action="${action%$'\r'}"
       case "$action" in
         q|Q) echo "bye."; exit 0 ;;
-        install|update|config|reset|uninstall|help) break ;;
+        install|config|reset|uninstall|help) break ;;
         *) echo "invalid: $action" ;;
       esac
     done
     case "$action" in
       help)
         echo "  install    install latest stable if not installed"
-        echo "  update     upgrade if installed version is older than latest"
         echo "  config     copy settings (backup .bak) + install missing extensions"
         echo "  reset      restore factory defaults  (type \"reset\" to confirm)"
         echo "  uninstall  remove editor and its config dir  (type \"uninstall\" to confirm)"
@@ -569,9 +610,6 @@ run_dashboard() {
           invalidate_latest "$editor"
         fi
         ;;
-      update)
-        update_editor "$editor" || true
-        ;;
     esac
   done
 }
@@ -582,7 +620,7 @@ run_dashboard() {
 banner
 detect_forks
 
-# action flags take priority (list-versions / install / update / uninstall)
+# action flags take priority (list-versions / install / uninstall)
 if [[ -n "$ACTION" ]]; then
   local_action_forks=("${FORK_ORDER[@]}")
   if [[ -n "$ACTION_FORK" ]]; then
@@ -604,7 +642,6 @@ if [[ -n "$ACTION" ]]; then
       latest="$(latest_for "$f")"
       case "$ACTION" in
         install)   desc="install $latest" ;;
-        update)    desc=$([[ "$inst" == "none" ]] && echo "not installed (install first)" || echo "update to $latest") ;;
         uninstall) desc="remove editor + config" ;;
       esac
       printf '  %-10s %-12s %-12s %s\n' "$f" "$inst" "$latest" "$desc"
@@ -630,7 +667,6 @@ if [[ -n "$ACTION" ]]; then
           install_editor "$f"
         fi
         ;;
-      update)    update_editor "$f" ;;
       uninstall) uninstall_editor "$f" ;;
     esac
     echo ""

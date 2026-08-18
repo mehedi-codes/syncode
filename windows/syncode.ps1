@@ -1,7 +1,7 @@
 # ============================================================
 #  syncode.ps1 - Sync and manage your VS Code and VSCodium editors.
 #  Windows / PowerShell version (Windows only).
-#  Version: 1.2.0
+#  Version: 1.3.0
 # ============================================================
 param(
     [Alias('h')][switch]$Help,
@@ -9,16 +9,15 @@ param(
     [Alias('d')][switch]$DryRun,
     [Alias('r')][switch]$Revert,
     [Alias('i')][switch]$Install,
-    [Alias('u')][switch]$Update,
     [Alias('rm')][switch]$Uninstall,
     [Alias('l')][switch]$ListVersions,
-    # optional fork name after -i/-u/-rm, e.g. "-i codium" (bare -i = all forks)
+    # optional fork name after -i/-rm, e.g. "-i codium" (bare -i = all forks)
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 
 $ErrorActionPreference = "Stop"
 
-$VERSION_STR = "1.2.0"
+$VERSION_STR = "1.3.0"
 $TOOL_NAME = "syncode"
 $DESCRIPTION = "Sync and manage your VS Code and VSCodium editors"
 
@@ -47,6 +46,115 @@ function Write-LogInfo  { Write-Host "[INFO ] $args" }
 function Write-LogWarn  { Write-Warning $args }
 function Write-LogError { Write-Error $args }
 
+# ------------------------------------------------------------
+#  Progress/spinner renderers (download % + indeterminate spinners)
+# ------------------------------------------------------------
+
+# Best-effort VT processing: needed for ANSI colors on Windows PowerShell 5.1's
+# conhost; pwsh 7 / Windows Terminal handle them natively. Redirected output
+# (pipes, CI) falls back to plain text.
+$script:CanAnsi = $false
+if (-not [Console]::IsOutputRedirected) {
+    try {
+        if ($PSVersionTable.PSVersion.Major -ge 7) {
+            $script:CanAnsi = $true
+        } elseif ($Host.Name -eq "ConsoleHost") {
+            Add-Type -Namespace Syncode -Name Vt -MemberDefinition @'
+[DllImport("kernel32.dll")]
+public static extern System.IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool GetConsoleMode(System.IntPtr hConsoleHandle, out uint lpMode);
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool SetConsoleMode(System.IntPtr hConsoleHandle, uint dwMode);
+'@
+            $h = [Syncode.Vt]::GetStdHandle(-11)
+            $mode = 0
+            if ([Syncode.Vt]::GetConsoleMode($h, [ref]$mode)) {
+                $script:CanAnsi = [Syncode.Vt]::SetConsoleMode($h, $mode -bor 0x4)
+            }
+        }
+    } catch {
+        $script:CanAnsi = $false
+    }
+}
+
+# Write-ProgressLine <label> <name> <pct> <frame> - single \r line: spinner at
+# start, a solid white background block behind the centered temp filename, real
+# % at the end. pct -1 = indeterminate (spinner only, no box).
+function Write-ProgressLine($label, $name, $pct, $frame) {
+    $e = [char]27
+    if (-not $script:CanAnsi) {
+        if ($pct -lt 0) { [Console]::Write("`r$frame  $label") }
+        else            { [Console]::Write("`r$frame  $label  $name  $pct%") }
+        return
+    }
+    if ($pct -lt 0) {
+        [Console]::Write("`r$frame  $label")
+        return
+    }
+    $box = 44
+    if ($name.Length -gt $box) { $name = $name.Substring($name.Length - $box) }
+    $left = [int][Math]::Floor(($box - $name.Length) / 2)
+    $right = $left + $name.Length
+    $fill = [int][Math]::Floor($box * $pct / 100)
+    if ($fill -gt $box) { $fill = $box }
+    if ($fill -lt 0) { $fill = 0 }
+    $W  = "$e[37m"; $K = "$e[30m"; $WB = "$e[47m"; $R = "$e[0m"
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.Append("`r$frame [$R")
+    $pre = [Math]::Min($fill, $left)
+    if ($pre -gt 0) { [void]$sb.Append($WB + $W + (" " * $pre) + $R) }
+    $onFill = [Math]::Max(0, [Math]::Min($fill, $right) - $left)
+    if ($onFill -gt 0) { [void]$sb.Append($WB + $K + $name.Substring(0, $onFill) + $R) }
+    if ($name.Length -gt $onFill) { [void]$sb.Append($W + $name.Substring($onFill) + $R) }
+    $after = $fill - $right
+    if ($after -gt 0) { [void]$sb.Append($WB + $W + (" " * $after) + $R) }
+    [void]$sb.Append("$R]  ${pct}%")
+    [Console]::Write($sb.ToString())
+}
+
+# Get-Download <fork> <ver> <url> <tmp> - WebClient async download with a live
+# progress line (real %). Throws on failure (temp file cleaned up).
+function Get-Download($fork, $ver, $url, $tmp) {
+    $script:dlpct = -1
+    $wc = New-Object System.Net.WebClient
+    $wc.add_DownloadProgressChanged({ param($s, $e) $script:dlpct = $e.ProgressPercentage })
+    $frames = "|/-\"
+    $i = 0
+    $label = "  ${fork}: downloading"
+    $name = Split-Path $tmp -Leaf
+    try {
+        $wc.DownloadFileAsync($url, $tmp)
+        while ($wc.IsBusy) {
+            Write-ProgressLine $label $name $script:dlpct $frames[$i % 4]
+            $i++
+            Start-Sleep -Milliseconds 100
+        }
+        $wc.Dispose()
+    } catch {
+        $wc.Dispose()
+        Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+        throw "${fork}: download failed ($($_.Exception.Message))"
+    }
+    if ($script:dlpct -lt 0) { $script:dlpct = 0 }
+    Write-ProgressLine $label $name $script:dlpct " "
+    Write-Output ""
+}
+
+# Wait-ProcessSpinner <label> <proc> - spinner while an installer/uninstaller
+# runs (no % available for silent installers; editors self-update).
+function Wait-ProcessSpinner($label, $p) {
+    $frames = "|/-\"
+    $i = 0
+    while (-not $p.HasExited) {
+        Write-ProgressLine $label "" -1 $frames[$i % 4]
+        $i++
+        Start-Sleep -Milliseconds 120
+    }
+    Write-ProgressLine $label "" -1 " "
+    Write-Output ""
+}
+
 function Show-Usage {
     Write-Output @"
 
@@ -67,7 +175,6 @@ OPTIONS:
                     extensions. With -d: applies to all detected editors;
                     without -d: interactive selection like apply.
     -i, --install [fork]    install latest stable (code/codium; default all)
-    -u, --update [fork]     upgrade if installed version is older than latest
     -rm, --uninstall [fork] remove editor and its config dir
     -l, --list-versions     show installed vs latest versions, then exit
 
@@ -76,7 +183,7 @@ WHAT IT DOES:
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected. With no flags, opens the interactive dashboard
-    (pick editor, then install/update/config/reset/uninstall/help).
+    (pick editor, then install/config/reset/uninstall/help).
 
 EXAMPLES:
     .\$SCRIPT_NAME           apply to selected editors (menu)
@@ -85,7 +192,6 @@ EXAMPLES:
     .\$SCRIPT_NAME -r        restore editors to factory defaults
     .\$SCRIPT_NAME -l        show installed vs latest versions
     .\$SCRIPT_NAME -i codium install latest VSCodium
-    .\$SCRIPT_NAME -u        update all editors
 "@
     exit 0
 }
@@ -238,7 +344,7 @@ function Apply-Fork($fork) {
 }
 
 # ------------------------------------------------------------
-#  Release-driven actions (install/update/uninstall) + dashboard
+#  Release-driven actions (install/uninstall) + dashboard
 # ------------------------------------------------------------
 . (Join-Path $PSScriptRoot "version.ps1")
 . (Join-Path $PSScriptRoot "release.ps1")
@@ -307,53 +413,50 @@ function Show-Dashboard {
     }
 }
 
-# Install-Editor <fork> - download (syncode temp name) + silent install
-# (/VERYSILENT /NORESTART /mergetasks=!runcode so the editor doesn't relaunch).
-# "already installed" check lives at the call sites; update calls straight
-# through so the Inno installer can upgrade in place.
-function Install-Editor($fork) {
+# Install-Editor <fork> [<variant>] - download (syncode temp name) + silent
+# install. Variant is a releases.json installer key: "win" (user exe, default),
+# "winSystem" (system exe), "winMsi" (VSCodium MSI). exe installers run Inno
+# (/VERYSILENT /NORESTART /mergetasks=!runcode so the editor doesn't relaunch);
+# msi installers run msiexec. The download renders a live progress line; the
+# installer run renders a spinner. "already installed" check lives at the call
+# sites; installs are always fresh (no update path - editors self-update).
+function Install-Editor($fork, $variant = "win") {
     $ver = Get-LatestCached $fork
     if ($ver -eq "unknown") { throw "${fork}: can't determine latest version" }
-    $url = Get-ReleaseUrl $fork "win" $ver
-    $tmp = Join-Path $env:TEMP ("syncode-{0}-{1}.exe" -f $fork, [guid]::NewGuid().ToString("N"))
-    Write-Output "  ${fork}: downloading $ver ..."
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $tmp -TimeoutSec 600
-    } catch {
-        Remove-Item -Force $tmp -ErrorAction SilentlyContinue
-        throw "${fork}: download failed ($($_.Exception.Message))"
+    $url = Get-ReleaseUrl $fork $variant $ver
+    $ext = if ($variant -match "msi") { "msi" } else { "exe" }
+    $tmp = Join-Path $env:TEMP ("syncode-{0}-{1}.{2}" -f $fork, [guid]::NewGuid().ToString("N"), $ext)
+    Get-Download $fork $ver $url $tmp
+    if ($ext -eq "msi") {
+        $p = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", $tmp, "/qn", "/norestart" -PassThru
+    } else {
+        $p = Start-Process -FilePath $tmp -ArgumentList "/VERYSILENT", "/NORESTART", "/mergetasks=!runcode" -PassThru
     }
-    $p = Start-Process -FilePath $tmp -ArgumentList "/VERYSILENT", "/NORESTART", "/mergetasks=!runcode" -Wait -PassThru
+    Wait-ProcessSpinner "  ${fork}: installing $ver" $p
     Remove-Item -Force $tmp
     if ($p.ExitCode -ne 0) { throw "${fork}: installer failed (exit $($p.ExitCode))" }
     Write-Output "  $fork installed"
 }
 
-# Update-Editor <fork> - upgrade if installed < latest; no-op if current.
-# Failures throw (flag mode -> exit 1; dashboard -> caught, loop continues).
-function Update-Editor($fork) {
-    $inst = Get-InstalledVersion $fork
-    $latest = Get-LatestCached $fork
-    if (-not $inst) { Write-Output "  $fork not installed - use install"; return }
-    if ($latest -eq "unknown") {
-        if ($script:RateLimited) { throw "${fork}: GitHub API rate limit hit - try later" }
-        else                     { throw "${fork}: can't check for updates (network unavailable)" }
-    }
-    if ((Compare-Version $inst $latest) -lt 0) {
-        Write-Output "  ${fork}: updating $inst -> $latest"
-        Install-Editor $fork
-    } else {
-        Write-Output "  ${fork}: already latest ($inst)"
-    }
-}
-
 # Uninstall-Editor <fork> - unins000.exe /VERYSILENT, winget fallback, config dir.
+# Checks both user (%LOCALAPPDATA%\Programs) and system ($env:ProgramFiles) install
+# dirs; MSI installs have no unins000.exe and fall through to winget by design.
 function Uninstall-Editor($fork) {
-    $dir = Join-Path $env:LOCALAPPDATA "Programs\$($FORK_DIR[$fork])"
-    $un = Join-Path $dir "unins000.exe"
-    if (Test-Path $un) {
-        Write-Output "  ${fork}: running unins000.exe ..."
-        $p = Start-Process -FilePath $un -ArgumentList "/VERYSILENT", "/NORESTART" -Wait -PassThru
+    # install dir name differs from config dir name for code (Microsoft VS Code)
+    $installDir = if ($fork -eq "code") { "Microsoft VS Code" } else { "VSCodium" }
+    $dirs = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\$installDir"),
+        (Join-Path ${env:ProgramFiles(x86)} "$installDir"),
+        (Join-Path $env:ProgramFiles "$installDir")
+    )
+    $un = $null
+    foreach ($d in $dirs) {
+        $candidate = Join-Path $d "unins000.exe"
+        if (Test-Path $candidate) { $un = $candidate; break }
+    }
+    if ($un) {
+        $p = Start-Process -FilePath $un -ArgumentList "/VERYSILENT", "/NORESTART" -PassThru
+        Wait-ProcessSpinner "  ${fork}: uninstalling" $p
         if ($p.ExitCode -ne 0) { Write-LogWarn "${fork}: uninstaller exit $($p.ExitCode)" }
     } else {
         $id = Get-ReleaseWinget $fork
@@ -362,6 +465,35 @@ function Uninstall-Editor($fork) {
     }
     Remove-Item -Recurse -Force (Join-Path $DATA_ROOT $FORK_DIR[$fork]) -ErrorAction SilentlyContinue
     Write-Output "  $fork removed"
+}
+
+# Select-InstallVariant <fork> - dashboard sub-prompt for installer variant.
+# Returns a releases.json installer key; Enter/empty = "win" (user, current default).
+function Select-InstallVariant($fork) {
+    if ($fork -eq "code") {
+        Write-Output "  installer variant:"
+        Write-Output "    1. User Installer"
+        Write-Output "    2. System Installer"
+        $line = Read-Line "  pick (default 1=User): "
+        if ($null -ne $line) { $line = $line.Trim() }
+        switch ($line) {
+            "2" { return "winSystem" }
+            "1" { return "win" }
+            default { return "win" }
+        }
+    }
+    Write-Output "  installer variant:"
+    Write-Output "    1. User Installer"
+    Write-Output "    2. System Installer"
+    Write-Output "    3. MSI (updates enabled)"
+    $line = Read-Line "  pick (default 1=User): "
+    if ($null -ne $line) { $line = $line.Trim() }
+    switch ($line) {
+        "2" { return "winSystem" }
+        "3" { return "winMsi" }
+        "1" { return "win" }
+        default { return "win" }
+    }
 }
 
 # Run-Dashboard - interactive hub: pick editor, pick action, loop. q quits.
@@ -386,14 +518,13 @@ function Run-Dashboard {
         }
         $action = ""
         while ($true) {
-            $line = Read-Line "action for $editor (install/update/config/reset/uninstall/help, q=quit) "
+            $line = Read-Line "action for $editor (install/config/reset/uninstall/help, q=quit) "
             if ($null -eq $line) { Write-Output "bye."; exit 0 }
             $action = $line.Trim()
             switch ($action) {
                 "q" { Write-Output "bye."; exit 0 }
                 "Q" { Write-Output "bye."; exit 0 }
                 "install" { $ok = $true }
-                "update"  { $ok = $true }
                 "config"  { $ok = $true }
                 "reset"   { $ok = $true }
                 "uninstall" { $ok = $true }
@@ -405,7 +536,6 @@ function Run-Dashboard {
         switch ($action) {
             "help" {
                 Write-Output "  install    install latest stable if not installed"
-                Write-Output "  update     upgrade if installed version is older than latest"
                 Write-Output "  config     copy settings (backup .bak) + install missing extensions"
                 Write-Output '  reset      restore factory defaults  (type "reset" to confirm)'
                 Write-Output '  uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
@@ -441,14 +571,10 @@ function Run-Dashboard {
                 if (Get-InstalledVersion $editor) {
                     Write-Output "  $editor already installed"
                 } else {
-                    try { Install-Editor $editor }
+                    try { Install-Editor $editor (Select-InstallVariant $editor) }
                     catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
                     Reset-LatestCache $editor
                 }
-            }
-            "update" {
-                try { Update-Editor $editor }
-                catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
             }
         }
     }
@@ -473,21 +599,17 @@ Write-Output ""
 Write-Output "$TOOL_NAME v$VERSION_STR - $DESCRIPTION"
 Write-Output ""
 
-# action flags take priority (list-versions / install / update / uninstall)
+# action flags take priority (list-versions / install / uninstall)
 $action = ""
 $actionForks = @()
 $forkArg = if ($Rest.Count -gt 0) { $Rest -join " " } else { "" }
 if ($Install) { $action = "install"; $actionForks = Resolve-ActionForks $forkArg }
-if ($Update) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u/-rm allowed" -ForegroundColor Red; exit 1 }
-    $action = "update"; $actionForks = Resolve-ActionForks $forkArg
-}
 if ($Uninstall) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u/-rm allowed" -ForegroundColor Red; exit 1 }
+    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-rm allowed" -ForegroundColor Red; exit 1 }
     $action = "uninstall"; $actionForks = Resolve-ActionForks $forkArg
 }
 if ($ListVersions) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u/-rm allowed" -ForegroundColor Red; exit 1 }
+    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-rm allowed" -ForegroundColor Red; exit 1 }
     $action = "list-versions"; $actionForks = @()
 }
 
@@ -504,7 +626,6 @@ if ($action) {
             $latest = Get-LatestCached $f
             $desc = switch ($action) {
                 "install"   { "install $latest" }
-                "update"    { if ($inst -eq "none") { "not installed (install first)" } else { "update to $latest" } }
                 "uninstall" { "remove editor + config" }
             }
             "{0,-10} {1,-12} {2,-12} {3}" -f $f, $inst, $latest, $desc
@@ -525,7 +646,6 @@ if ($action) {
                     if (Get-InstalledVersion $f) { Write-Output "  $f already installed" }
                     else { Install-Editor $f }
                 }
-                "update"    { Update-Editor $f }
                 "uninstall" { Uninstall-Editor $f }
             }
             Write-Output ""

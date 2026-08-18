@@ -58,10 +58,13 @@ function Test-ReleaseModule {
     $cases = @(
         @("https://update.code.visualstudio.com/api/releases/stable", (Get-ReleaseLatestApi "code")),
         @("https://update.code.visualstudio.com/<ver>/win32-x64-user/stable", (Get-ReleaseInstallerUrl "code" "win")),
+        @("https://update.code.visualstudio.com/<ver>/win32-x64/stable", (Get-ReleaseInstallerUrl "code" "winSystem")),
         @("https://update.code.visualstudio.com/<ver>/linux-deb-x64/stable", (Get-ReleaseInstallerUrl "code" "linux")),
         @("https://update.code.visualstudio.com/<ver>/linux-rpm-x64/stable", (Get-ReleaseInstallerUrl "code" "linuxRpm")),
         @("https://update.code.visualstudio.com/<ver>/linux-x64/stable", (Get-ReleaseInstallerUrl "code" "linuxTar")),
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodiumUserSetup-x64-<ver>.exe", (Get-ReleaseInstallerUrl "codium" "win")),
+        @("https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodiumSetup-x64-<ver>.exe", (Get-ReleaseInstallerUrl "codium" "winSystem")),
+        @("https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodium-x64-<ver>.msi", (Get-ReleaseInstallerUrl "codium" "winMsi")),
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/codium_<ver>_amd64.deb", (Get-ReleaseInstallerUrl "codium" "linux")),
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/codium-<ver>-el8.x86_64.rpm", (Get-ReleaseInstallerUrl "codium" "linuxRpm")),
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodium-linux-x64-<ver>.tar.gz", (Get-ReleaseInstallerUrl "codium" "linuxTar")),

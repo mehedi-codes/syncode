@@ -2,7 +2,7 @@
 #  install.ps1 - syncode one-time runner (Windows / PowerShell)
 #  Fetches the latest syncode.ps1 + config via Invoke-WebRequest
 #  (no git, no cache) and runs it immediately from a temp dir.
-#  Version: 1.2.0
+#  Version: 1.3.0
 # ============================================================
 param(
     [Alias('h')][switch]$Help,
@@ -10,10 +10,9 @@ param(
     [Alias('d')][switch]$DryRun,
     [Alias('r')][switch]$Revert,
     [Alias('i')][switch]$Install,
-    [Alias('u')][switch]$Update,
     [Alias('rm')][switch]$Uninstall,
     [Alias('l')][switch]$ListVersions,
-    # optional fork name after -i/-u/-rm, passed through to syncode.ps1
+    # optional fork name after -i/-rm, passed through to syncode.ps1
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 
@@ -48,7 +47,6 @@ try {
     if ($DryRun)      { $psb.DryRun = $true }
     if ($Revert)      { $psb.Revert = $true }
     if ($Install)     { $psb.Install = $true }
-    if ($Update)      { $psb.Update = $true }
     if ($Uninstall)   { $psb.Uninstall = $true }
     if ($ListVersions){ $psb.ListVersions = $true }
     if ($Rest.Count -gt 0) { $psb.Rest = $Rest }
