@@ -10,10 +10,12 @@
 ```
 > Sync and manage your VS Code and VSCodium editors.
 
-`syncode` detects which editors are installed, shows you a plan, and — with
+**Settings sync for VS Code and VSCodium, from one command.** `syncode`
+detects which editors are installed, shows you a plan, and — with
 your confirmation — copies `settings.json` and installs the extensions listed
 in `extensions.json`. Run it once to set up a new machine, or re-run it any
-time to bring an editor back in sync.
+time to bring an editor back in sync. It can also install, update, or
+uninstall the editors themselves.
 
 ## Supported editors
 
