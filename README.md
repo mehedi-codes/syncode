@@ -39,17 +39,17 @@ runs it from a temp dir.
 **Linux** (needs bash 4+ and curl):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o syncode-install.sh && bash syncode-install.sh
+curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o /tmp/syncode-install.sh && bash /tmp/syncode-install.sh
 ```
 
 **Windows** (PowerShell; needs no curl — uses `Invoke-RestMethod`):
 
 ```powershell
-irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile install.ps1; .\install.ps1
+$p = Join-Path $env:TEMP "syncode-install.ps1"; irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile $p; & $p
 ```
 
 Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-u`, `-rm`),
-e.g. `bash syncode-install.sh -d` or `.\install.ps1 -d` for a dry-run.
+e.g. append `-d` to the Windows one-liner (`...; & $p -d`) for a dry-run.
 
 Prefer cloning? The repo runs directly too — see [Usage](#usage).
 
