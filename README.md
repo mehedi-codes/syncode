@@ -102,7 +102,7 @@ Run with no flags to get a live dashboard instead of the one-shot plan:
 
 ```
   name     installed    latest      settings  extensions
-  code     1.132.0      1.133.0     ✓ synced  2 missing
+  code     1.132.0      1.133.0     synced    2 missing
   codium   1.126.04524  1.126.04524 diverged  1 missing
 
   pick editor (1=code 2=codium, q=quit)

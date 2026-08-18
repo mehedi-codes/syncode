@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  syncode — sync your editor setup to every VS Code-family editor
+#  syncode - sync your editor setup to every VS Code-family editor
 #  Version: 1.1.0
 # ============================================================
 set -Eeuo pipefail
@@ -62,7 +62,7 @@ usage() {
 
 $BANNER
 
-$TOOL_NAME v$VERSION — $DESCRIPTION
+$TOOL_NAME v$VERSION - $DESCRIPTION
 
 USAGE:
     $SCRIPT_NAME [OPTIONS]
@@ -128,7 +128,7 @@ done
 # ------------------------------------------------------------
 banner() {
   printf '\n%s\n\n' "$BANNER"
-  printf '%s v%s — %s\n\n' "$TOOL_NAME" "$VERSION" "$DESCRIPTION"
+  printf '%s v%s - %s\n\n' "$TOOL_NAME" "$VERSION" "$DESCRIPTION"
 }
 
 # ------------------------------------------------------------
@@ -271,7 +271,7 @@ plan_fork() {
         out="$out, extensions up to date"
       fi
     else
-      out="$out, no CLI found — extensions skipped"
+      out="$out, no CLI found - extensions skipped"
     fi
   fi
   printf '%s' "$out"
@@ -329,7 +329,7 @@ apply_fork() {
       done
     fi
   else
-    echo "    $fork: no CLI found — settings handled, extensions skipped"
+    echo "    $fork: no CLI found - settings handled, extensions skipped"
   fi
 }
 
@@ -341,7 +341,7 @@ source "$SCRIPT_DIR/version.sh"
 
 declare -A LATEST_CACHE=()
 
-# latest_for <fork> — echoes latest (or "unknown"), cached per session.
+# latest_for <fork> - echoes latest (or "unknown"), cached per session.
 latest_for() {
   local fork="$1" v
   if [[ -n "${LATEST_CACHE[$fork]:-}" ]]; then
@@ -359,8 +359,8 @@ latest_for() {
 
 invalidate_latest() { unset "LATEST_CACHE[$1]"; }
 
-# resolve_cli <fork> — PATH first, else known install-path binary
-# (closes the fresh-install dead-end: install → config in the same session).
+# resolve_cli <fork> - PATH first, else known install-path binary
+# (closes the fresh-install dead-end: install -> config in the same session).
 resolve_cli() {
   local fork="$1" cli p
   cli="$(command -v "$fork" 2>/dev/null || true)"
@@ -378,33 +378,33 @@ resolve_cli() {
   return 0
 }
 
-# show_list_versions — -l / --list-versions table
+# show_list_versions - -l / --list-versions table
 show_list_versions() {
   printf '  %-10s %-12s %s\n' name installed latest
   local f inst
   for f in "${FORK_ORDER[@]}"; do
     inst="$(get_installed_version "$f")"
-    [[ -z "$inst" ]] && inst="—"
+    [[ -z "$inst" ]] && inst="-"
     printf '  %-10s %-12s %s\n' "$f" "$inst" "$(latest_for "$f")"
   done
 }
 
-# render_dashboard — one row per fork: name / installed / latest / settings / extensions
+# render_dashboard - one row per fork: name / installed / latest / settings / extensions
 render_dashboard() {
   printf '  %-8s %-12s %-12s %-9s %s\n' name installed latest settings extensions
   local f inst latest settings ext missing cli
   for f in "${FORK_ORDER[@]}"; do
     inst="$(get_installed_version "$f")"
-    [[ -z "$inst" ]] && inst="—"
+    [[ -z "$inst" ]] && inst="-"
     latest="$(latest_for "$f")"
     if [[ -f "$(settings_path "$f")" ]]; then
       if cmp -s "$(settings_path "$f")" "$CONFIG_DIR/settings.json"; then
-        settings="✓ synced"
+        settings="synced"
       else
         settings="diverged"
       fi
     else
-      settings="—"
+      settings="-"
     fi
     cli="$(resolve_cli "$f")"
     if [[ -n "$cli" ]]; then
@@ -422,8 +422,8 @@ render_dashboard() {
   done
 }
 
-# install_editor <fork> [ver] — download (syncode temp name) + silent install.
-# apt → .deb, dnf/yum → .rpm, else tarball → ~/.local/share/<ForkDir>.
+# install_editor <fork> [ver] - download (syncode temp name) + silent install.
+# apt -> .deb, dnf/yum -> .rpm, else tarball -> ~/.local/share/<ForkDir>.
 # "already installed" check lives at the call sites (dashboard / -i flag);
 # update calls straight through so the Inno/pkg installers can upgrade in place.
 install_editor() {
@@ -464,18 +464,18 @@ install_editor() {
   echo "  $fork installed"
 }
 
-# update_editor <fork> — upgrade if installed < latest; no-op if current.
+# update_editor <fork> - upgrade if installed < latest; no-op if current.
 update_editor() {
   local fork="$1" inst latest
   inst="$(get_installed_version "$fork")"
   latest="$(latest_for "$fork")"
   if [[ -z "$inst" ]]; then
-    echo "  $fork not installed — use install"
+    echo "  $fork not installed - use install"
     return 0
   fi
   if [[ "$latest" == "unknown" ]]; then
     if [[ "${RELEASE_RATE_LIMITED:-0}" == "1" ]]; then
-      log_error "$fork: GitHub API rate limit hit — try later"
+      log_error "$fork: GitHub API rate limit hit - try later"
     else
       log_error "$fork: can't check for updates (network unavailable)"
     fi
@@ -489,7 +489,7 @@ update_editor() {
   fi
 }
 
-# uninstall_editor <fork> — pkg manager remove + config dir; tarball → rm -rf.
+# uninstall_editor <fork> - pkg manager remove + config dir; tarball -> rm -rf.
 uninstall_editor() {
   local fork="$1" pkg dir
   pkg="$(release_uninstall_name "$fork")"
@@ -505,7 +505,7 @@ uninstall_editor() {
   echo "  $fork removed"
 }
 
-# run_dashboard — interactive hub: pick editor, pick action, loop. q quits.
+# run_dashboard - interactive hub: pick editor, pick action, loop. q quits.
 run_dashboard() {
   local line editor action
   while true; do
@@ -548,7 +548,7 @@ run_dashboard() {
         if [[ "$line" == "reset" ]]; then
           REVERT=true; apply_fork "$editor" || true; REVERT=false
         else
-          echo "  not confirmed — skipped"
+          echo "  not confirmed - skipped"
         fi
         ;;
       uninstall)
@@ -558,7 +558,7 @@ run_dashboard() {
           uninstall_editor "$editor" || true
           invalidate_latest "$editor"
         else
-          echo "  not confirmed — skipped"
+          echo "  not confirmed - skipped"
         fi
         ;;
       install)
@@ -609,7 +609,7 @@ if [[ -n "$ACTION" ]]; then
       esac
       printf '  %-10s %-12s %-12s %s\n' "$f" "$inst" "$latest" "$desc"
     done
-    echo "DRY RUN — nothing applied."
+    echo "DRY RUN - nothing applied."
     exit 0
   fi
   echo ""
@@ -638,7 +638,7 @@ if [[ -n "$ACTION" ]]; then
   exit 0
 fi
 
-# no flags → interactive dashboard
+# no flags -> interactive dashboard
 if [[ "$REVERT" == false && "$DRY_RUN" == false ]]; then
   run_dashboard
   exit 0
@@ -709,7 +709,7 @@ if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
 fi
 
 if [[ "$DRY_RUN" == true ]]; then
-  echo "DRY RUN — nothing applied."
+  echo "DRY RUN - nothing applied."
   exit 0
 fi
 

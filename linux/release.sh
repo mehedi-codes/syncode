@@ -9,7 +9,7 @@ set -Eeuo pipefail
 CONFIG_DIR="${CONFIG_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../shared" && pwd -P)}"
 RELEASES_FILE="$CONFIG_DIR/releases.json"
 
-# release_get <fork> <sed-regex> — first captured value under the fork block.
+# release_get <fork> <sed-regex> - first captured value under the fork block.
 # ponytail: releases.json has a fixed schema; the extraction is unambiguous
 # because installer URLs are quoted strings while the uninstall object lines
 # are `"win":  {` (brace, not quote) and so don't match URL patterns.
@@ -27,10 +27,10 @@ release_uninstall_exe()  { release_get "$1" '.*"exe":[[:space:]]*"\([^"]*\)".*';
 release_uninstall_name() { release_get "$1" '.*"name":[[:space:]]*"\([^"]*\)".*'; }
 release_winget()         { release_get "$1" '.*"winget":[[:space:]]*"\([^"]*\)".*'; }
 
-# release_url <fork> <platform> <ver> — installer URL with <ver> substituted.
+# release_url <fork> <platform> <ver> - installer URL with <ver> substituted.
 release_url() { release_installer_url "$1" "$2" | sed "s|<ver>|$3|g"; }
 
-# release_latest <fork> — echoes latest version; exit 1 on failure.
+# release_latest <fork> - echoes latest version; exit 1 on failure.
 # Sets RELEASE_RATE_LIMITED=1 if codium hit the GitHub 403 rate limit.
 release_latest() {
   local fork="$1" api code tmp

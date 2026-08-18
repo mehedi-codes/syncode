@@ -12,9 +12,10 @@ to factory defaults, install/update/uninstall editor binaries (VS Code,
 VSCodium) via release-channel lookups, and show installed-vs-latest versions.
 No flags opens an interactive dashboard.
 
-There is **no build step, no package manager, no tests, no CI**. The tool is
+There is **no build step, no package manager, no unit tests**. The tool is
 three bash + three PowerShell scripts under `linux/`/`windows/`, plus config
-data under `shared/`; everything else is docs.
+data under `shared/`; everything else is docs. CI (GitHub Actions) runs
+sandboxed dry-runs + syntax/parse checks — see the layout table.
 
 ## Repository layout
 
@@ -198,8 +199,9 @@ script (install temp dir) or via `../shared` (repo checkout).
   (Windows).
 - **Idempotent & safe** — double-run is a no-op; settings are backed up to
   `.bak` before overwrite; user-installed extensions are never touched.
-- **Four small files** — `syncode.sh` (~400 lines) + `install.sh` runner on
-  Linux, `syncode.ps1` + `install.ps1` on Windows, no build/install step.
+- **Six small files** — `syncode.sh` (~740 lines) + `version.sh`/`release.sh`
+  modules + `install.sh` runner on Linux, the matching PowerShell trio on
+  Windows, no build/install step.
 - **Native per platform** — bash on Linux, PowerShell on Windows; no
   Git Bash, WSL, or cross-shell shims.
 - **Cross-fork** — one config drives VS Code and VSCodium.

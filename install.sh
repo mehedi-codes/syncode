@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  syncode — one-time runner
+#  syncode - one-time runner
 #  Fetches the latest syncode.sh + config via curl (no git,
 #  no cache) and runs it immediately from a temp directory.
 #  Version: 1.0.0
@@ -19,7 +19,7 @@ FILES=(
 
 # Guard: curl required (no git involved)
 if ! command -v curl &>/dev/null; then
-  echo "ERROR: curl is required to run syncode — install curl and retry" >&2
+  echo "ERROR: curl is required to run syncode - install curl and retry" >&2
   exit 1
 fi
 
@@ -42,6 +42,6 @@ for entry in "${FILES[@]}"; do
 done
 curl -fsSL "${curl_args[@]}"
 
-# Run with the real terminal attached (stdin inherited — prompts work).
+# Run with the real terminal attached (stdin inherited - prompts work).
 # Not exec: the EXIT trap below must fire to clean up the temp dir.
 bash "$tmp/syncode.sh" "$@"
