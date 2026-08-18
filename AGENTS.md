@@ -32,6 +32,7 @@ data under `shared/`; everything else is docs.
 | `shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
 | `shared/releases.json` | Per-fork release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers `-i/-u/-rm/-l` and the dashboard's latest column. |
 | `shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
+| `.github/workflows/ci.yml` | GitHub Actions: bash syntax + sandbox dry-runs (both layouts), ps1 parse (7 + 5.1) + ASCII check, doc coverage, version lockstep. |
 | `README.md` | User-facing docs. Keep in sync if CLI behavior changes. |
 
 Platform dirs (`linux/`, `windows/`) hold the scripts; `shared/` holds the
@@ -140,10 +141,15 @@ script (install temp dir) or via `../shared` (repo checkout).
 
 **Testing / verification without touching a real machine:**
 
-- Linux: `bash -n linux/syncode.sh` — syntax check;
-  `bash linux/syncode.sh -d` — dry run.
+- CI (`.github/workflows/ci.yml`) runs on every push/PR: bash syntax check,
+  sandboxed `-d` dry-runs for both config layouts (checkout `../shared` and
+  flattened install), PowerShell parse checks on pwsh 7 + 5.1, ASCII-only
+  ps1 check (5.1 misreads non-ASCII as ANSI — a real regression source),
+  `extensions.md` coverage of every `extensions.json` ID, and bash/ps1
+  version lockstep.
+- Locally: Linux — `bash -n linux/syncode.sh`; `bash linux/syncode.sh -d`.
   `bash linux/release.sh` runs the release module self-check (no network).
-- Windows: run `windows/syncode.ps1 -d` in pwsh;
+- Windows: `windows/syncode.ps1 -d` in pwsh;
   `powershell.exe -File windows/syncode.ps1 -d` for the 5.1 path. Parse
   check: `[System.Management.Automation.Language.Parser]::ParseFile('windows/syncode.ps1',[ref]$null,[ref]$err)`.
 - `shellcheck linux/syncode.sh` if available (not a repo dependency).
@@ -217,7 +223,8 @@ script (install temp dir) or via `../shared` (repo checkout).
 - **`custom-ui-style` patches editor installation files** — the one managed
   extension with real side effects; rollback exists but it's the riskiest
   piece of the setup.
-- **No tests** — verification is manual (`bash -n`, `-d` dry-run). Don't
-  assume behavior is covered by anything automated.
+- **No unit tests** — CI runs sandboxed `-d` dry-runs, syntax/parse checks,
+  doc coverage, and version lockstep; it doesn't exercise full behavioral
+  coverage (interactive apply/revert, network release lookups).
 - **Monolithic script** — all logic lives in one file; changes are
   low-risk individually but there's no unit isolation.
