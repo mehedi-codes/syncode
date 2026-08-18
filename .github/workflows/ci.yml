@@ -10,116 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      - name: bash syntax check
-        run: bash -n linux/syncode.sh linux/version.sh linux/release.sh install.sh
-
-      - name: release module self-check (no network)
-        run: bash linux/release.sh
-
-      - name: sandbox dry-run (checkout layout, ../shared configs)
-        run: |
-          set -euo pipefail
-          sandbox="$RUNNER_TEMP/sandbox"
-          mkdir -p "$sandbox/bin" "$sandbox/home/.config/Code/User" "$sandbox/home/.config/VSCodium/User"
-          cat > "$sandbox/bin/code" <<'EOF'
-          #!/usr/bin/env bash
-          case "$1" in
-            --version) echo 1.2.3 ;;
-            --list-extensions) echo "aaron-bond.better-comments"; echo "editorconfig.editorconfig" ;;
-          esac
-          EOF
-          cp "$sandbox/bin/code" "$sandbox/bin/codium"
-          chmod +x "$sandbox/bin/code" "$sandbox/bin/codium"
-          cp shared/settings.json "$sandbox/home/.config/Code/User/settings.json"
-          echo '{"workbench.colorTheme":"Not Synced"}' > "$sandbox/home/.config/VSCodium/User/settings.json"
-          export PATH="$sandbox/bin:$PATH" HOME="$sandbox/home"
-          out="$(bash linux/syncode.sh -d)"
-          echo "$out"
-          grep -q "settings already in sync" <<< "$out"
-          grep -q "copy settings (backup -> .bak)" <<< "$out"
-          grep -q "DRY RUN" <<< "$out"
-
-      - name: sandbox dry-run (flattened install layout, beside-script configs)
-        run: |
-          set -euo pipefail
-          sandbox="$RUNNER_TEMP/sandbox-flat"
-          mkdir -p "$sandbox/bin" "$sandbox/home/.config/Code/User"
-          cp linux/syncode.sh linux/version.sh linux/release.sh shared/settings.json shared/extensions.json shared/releases.json "$sandbox/"
-          cat > "$sandbox/bin/code" <<'EOF'
-          #!/usr/bin/env bash
-          case "$1" in
-            --version) echo 1.2.3 ;;
-            --list-extensions) echo "aaron-bond.better-comments" ;;
-          esac
-          EOF
-          cp "$sandbox/bin/code" "$sandbox/bin/codium"
-          chmod +x "$sandbox/bin/code" "$sandbox/bin/codium"
-          export PATH="$sandbox/bin:$PATH" HOME="$sandbox/home"
-          bash "$sandbox/syncode.sh" -d | tee /dev/stderr | grep -q "DRY RUN"
-
-      - name: extensions.json docs coverage
-        run: |
-          set -euo pipefail
-          for id in $(grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"' shared/extensions.json | tr -d '"'); do
-            grep -qF "$id" shared/extensions.md || { echo "missing doc for $id"; exit 1; }
-          done
-
-      - name: port lockstep (version string)
-        run: |
-          bash_ver="$(sed -n 's/^VERSION="\(.*\)"/\1/p' linux/syncode.sh)"
-          ps_ver="$(sed -n 's/^\$VERSION_STR = "\(.*\)"/\1/p' windows/syncode.ps1)"
-          echo "bash=$bash_ver ps=$ps_ver"
-          test "$bash_ver" = "$ps_ver"
+      - name: Linux checks
+        run: bash .github/scripts/ci-linux.sh
 
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-
-      - name: parse check (pwsh 7) + ASCII-only source
+      - name: Windows checks (pwsh 7)
         shell: pwsh
-        run: pwsh -NoProfile -File .github/scripts/ps-parse-check.ps1
-
-      - name: parse check (5.1) + ASCII-only source
+        run: pwsh -NoProfile -File .github/scripts/ci-windows.ps1
+      - name: Windows checks (5.1)
         shell: pwsh
-        run: '& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File .github/scripts/ps-parse-check.ps1'
-
-      - name: sandbox dry-run (5.1, checkout layout)
-        shell: pwsh
-        run: |
-          $sandbox = Join-Path $env:RUNNER_TEMP "sandbox"
-          New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "VSCodium\User"), (Join-Path $sandbox "bin") | Out-Null
-          @'
-          @echo off
-          if "%1"=="--version" echo 1.2.3
-          if "%1"=="--list-extensions" echo aaron-bond.better-comments & echo editorconfig.editorconfig
-          '@ | Set-Content (Join-Path $sandbox "bin\code.cmd") -Encoding ascii
-          Copy-Item (Join-Path $sandbox "bin\code.cmd") (Join-Path $sandbox "bin\codium.cmd")
-          Copy-Item shared/settings.json (Join-Path $sandbox "Code\User\settings.json")
-          '{"workbench.colorTheme":"Not Synced"}' | Set-Content (Join-Path $sandbox "VSCodium\User\settings.json") -Encoding ascii
-          $env:APPDATA = $sandbox
-          $env:Path = (Join-Path $sandbox "bin") + ";" + $env:Path
-          $out = & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File windows/syncode.ps1 -d 2>&1 | Out-String
-          Write-Output $out
-          if ($out -notmatch "settings already in sync") { exit 1 }
-          if ($out -notmatch "copy settings") { exit 1 }
-          if ($out -notmatch "DRY RUN") { exit 1 }
-
-      - name: sandbox dry-run (flattened install layout)
-        shell: pwsh
-        run: |
-          $sandbox = Join-Path $env:RUNNER_TEMP "sandbox-flat"
-          New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "bin") | Out-Null
-          Copy-Item windows/syncode.ps1, windows/version.ps1, windows/release.ps1, shared/settings.json, shared/extensions.json, shared/releases.json $sandbox
-          @'
-          @echo off
-          if "%1"=="--version" echo 1.2.3
-          if "%1"=="--list-extensions" echo aaron-bond.better-comments
-          '@ | Set-Content (Join-Path $sandbox "bin\code.cmd") -Encoding ascii
-          Copy-Item (Join-Path $sandbox "bin\code.cmd") (Join-Path $sandbox "bin\codium.cmd")
-          $env:APPDATA = $sandbox
-          $env:Path = (Join-Path $sandbox "bin") + ";" + $env:Path
-          $out = & pwsh -NoProfile -File (Join-Path $sandbox "syncode.ps1") -d 2>&1 | Out-String
-          Write-Output $out
-          if ($out -notmatch "DRY RUN") { exit 1 }
+        run: '& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File .github/scripts/ci-windows.ps1'
