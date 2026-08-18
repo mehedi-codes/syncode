@@ -17,9 +17,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Windows checks (pwsh 7)
+      - name: PowerShell (7+)
         shell: pwsh
         run: pwsh -NoProfile -File .github/ci/windows.ps1
-      - name: Windows checks (5.1)
+      - name: Windows PowerShell (5.1)
         shell: pwsh
         run: '& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File .github/ci/windows.ps1'
