@@ -1,12 +1,12 @@
 ```
-:'######:'##:::'##'##::: ##:'######::'#######:'########:'########:
-'##... ##. ##:'##::###:: ##'##... ##'##.... ##:##.... ##:##.....::
- ##:::..::. ####:::####: ##:##:::..::##:::: ##:##:::: ##:##:::::::
-. ######:::. ##::::## ## ##:##:::::::##:::: ##:##:::: ##:######:::
-:..... ##::: ##::::##. ####:##:::::::##:::: ##:##:::: ##:##...::::
-'##::: ##::: ##::::##:. ###:##::: ##:##:::: ##:##:::: ##:##:::::::
-. ######:::: ##::::##::. ##. ######:. #######::########::########:
-:......:::::..::::..::::..::......:::.......::........::........::
+:'######::'##:::'##:'##::: ##::'######:::'#######::'########::'########:
+'##... ##:. ##:'##:: ###:: ##:'##... ##:'##.... ##: ##.... ##: ##.....::
+ ##:::..:::. ####::: ####: ##: ##:::..:: ##:::: ##: ##:::: ##: ##:::::::
+. ######::::. ##:::: ## ## ##: ##::::::: ##:::: ##: ##:::: ##: ######:::
+:..... ##:::: ##:::: ##. ####: ##::::::: ##:::: ##: ##:::: ##: ##...::::
+'##::: ##:::: ##:::: ##:. ###: ##::: ##: ##:::: ##: ##:::: ##: ##:::::::
+. ######::::: ##:::: ##::. ##:. ######::. #######:: ########:: ########:
+:......::::::..:::::..::::..:::......::::.......:::........:::........::
 ```
 > Sync and manage your VS Code and VSCodium editors.
 
@@ -96,55 +96,71 @@ bash linux/syncode.sh -u    # uninstall all editors + config dirs
 
 ### Interactive dashboard
 
-Run with no flags to get a live dashboard instead of the one-shot plan:
+Run with no flags to get a live dashboard instead of the one-shot plan. Every
+pick repaints the whole screen (banner, status table, and menu); the last
+result (installed extension, help text, invalid input) stays visible as a
+notice line above the menu:
 
 ```
-  name     installed    latest      settings  extensions
-  code     1.132.0      1.133.0     synced    2 missing
-  codium   1.126.04524  1.126.04524 diverged  1 missing
+  +--------+-----------+-------------+----------+------------+
+  | Name   | Installed | Latest      | Settings | Extensions |
+  +--------+-----------+-------------+----------+------------+
+  | code   | 1.132.0   | 1.133.0     | synced   | 2 missing  |
+  | codium | 1.126.0   | 1.126.04524 | diverged | 1 missing  |
+  +--------+-----------+-------------+----------+------------+
 
   Pick an option:
-    1. Visual Studio Code
-    2. VSCodium
-    3. Help
-    4. Quit
+
+  1. Visual Studio Code
+  2. VSCodium
+  3. Help
+  4. Quit
+
   Enter an option: 1
 
-  Visual Studio Code
-  Pick an option:
-    1. Install
-    2. Config
-    3. Reset
-    4. Uninstall
-    5. Help
-    6. Menu
-    7. Quit
+  Pick an option for Visual Studio Code:
+
+  1. Install
+  2. Config
+  3. Reset
+  4. Uninstall
+  5. Help
+  6. Menu
+  7. Quit
+
   Enter an option: 2
 
-  Visual Studio Code
-  Pick an option:
-    1. Settings
-    2. Extensions
-    3. Help
-    4. Menu
-    5. Quit
+  Pick an option for Visual Studio Code:
+
+  1. Settings
+  2. Extensions
+  3. Help
+  4. Menu
+  5. Quit
+
   Enter an option: 2
 
   Visual Studio Code extensions
-    1. [x] ms-python.python
-    2. [ ] esbenp.prettier-vscode
-    3. [ ] bradlc.vscode-tailwindcss
+  Pick an option:
+
+  1. [x] ms-python.python
+  2. [ ] esbenp.prettier-vscode
+  3. [ ] bradlc.vscode-tailwindcss
   a. All  n. None  i. Install selected  u. Uninstall selected
   h. Help  m. Menu  q. Quit
+
   Enter an option:
 ```
 
+(When the output isn't a terminal — piped or in CI — the screen-clear is
+skipped and the frames stack, so transcripts stay readable.)
+
 Each row shows installed vs latest version (fetched live from the official
 release APIs, cached per session), whether settings are in sync, and the
-missing-extension count. Pick an editor (by its full name — the editor's
-name is shown above the action menu), then an action from the numbered
-menu — `install`/`uninstall` manage the editor itself (downloads are written
-to a `syncode-*` temp file; Windows installs run
+missing-extension count; column widths grow with the longest value, and the
+header is bold on a terminal. Pick an editor (by its number), then an action
+from the numbered menu — `install`/`uninstall` manage the editor itself
+(downloads are written to a `syncode-*` temp file; Windows installs run
 `/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never launches
 on its own). `config` (only offered when the editor is installed) opens a
 submenu: `settings` copies the shared settings file (backing up to `.bak`),
@@ -153,7 +169,10 @@ their numbers, `a` selects all, `n` clears, then `i`/`u` install or uninstall
 the selection. `reset` and `uninstall` require typing the word to confirm;
 the Windows install action asks which installer variant to use.
 Every menu offers `Help`; `Menu` returns to the editor list, `Quit` (or `q`)
-exits; invalid input just re-prompts.
+exits; invalid input just re-prompts. Each menu's output is flush-left with
+the option list framed by blank lines; the last action's result (installed
+extensions, help text, invalid input, skipped confirmations) is shown as a
+notice line that survives the repaint.
 
 ## What it does
 

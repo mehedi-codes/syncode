@@ -80,7 +80,18 @@ Beyond apply/revert there are **release-driven actions** (`-i` install,
 picker — `config` (only for installed editors) splits into a
 settings/extensions submenu, and extensions uses a multiselect picker
 (toggle numbers, `a`=all, `n`=none, `i`/`u` install/uninstall selection).
-Keep both ports in lockstep for these too.
+The dashboard is a **repaint loop**: every pick clears the screen (TTY only)
+and redraws the banner + status table + a notice line + the active menu, all
+flush-left with blank lines framing the option list. The status table is a
+**boxed grid** (ASCII `+---+` only — 5.1 can't render box-drawing glyphs, and
+output stays byte-identical between ports): column widths = longest cell
+(header or value) + 2 padding so nothing overflows, headers are Title Case
+and bold on a TTY, and the editor's name is folded into the menu prompt
+(`Pick an option for Visual Studio Code:`). Feedback (installed
+extensions, help text, invalid input, skipped confirmations) goes to the
+notice line so it survives the repaint; bash keeps it in `DASH_NOTICE`, ps1 in
+`$script:Notice`. Non-terminal output skips the clear and stacks frames.
+Keep both ports in lockstep for all of this.
 
 ### Platform handling
 
