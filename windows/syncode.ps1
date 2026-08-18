@@ -9,9 +9,9 @@ param(
     [Alias('d')][switch]$DryRun,
     [Alias('r')][switch]$Revert,
     [Alias('i')][switch]$Install,
-    [Alias('rm')][switch]$Uninstall,
+    [Alias('u')][switch]$Uninstall,
     [Alias('l')][switch]$ListVersions,
-    # optional fork name after -i/-rm, e.g. "-i codium" (bare -i = all forks)
+    # optional fork name after -i/-u, e.g. "-i codium" (bare -i = all forks)
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 
@@ -175,7 +175,7 @@ OPTIONS:
                     extensions. With -d: applies to all detected editors;
                     without -d: interactive selection like apply.
     -i, --install [fork]    install latest stable (code/codium; default all)
-    -rm, --uninstall [fork] remove editor and its config dir
+    -u, --uninstall [fork] remove editor and its config dir
     -l, --list-versions     show installed vs latest versions, then exit
 
 WHAT IT DOES:
@@ -605,11 +605,11 @@ $actionForks = @()
 $forkArg = if ($Rest.Count -gt 0) { $Rest -join " " } else { "" }
 if ($Install) { $action = "install"; $actionForks = Resolve-ActionForks $forkArg }
 if ($Uninstall) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-rm allowed" -ForegroundColor Red; exit 1 }
+    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u allowed" -ForegroundColor Red; exit 1 }
     $action = "uninstall"; $actionForks = Resolve-ActionForks $forkArg
 }
 if ($ListVersions) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-rm allowed" -ForegroundColor Red; exit 1 }
+    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u allowed" -ForegroundColor Red; exit 1 }
     $action = "list-versions"; $actionForks = @()
 }
 

@@ -31,7 +31,7 @@ sandboxed dry-runs + syntax/parse checks — see the layout table.
 | `windows/release.ps1` | Windows release lookups (dot-sourced by `syncode.ps1`). |
 | `shared/settings.json` | Source-of-truth editor settings (JSONC). Applied to every selected editor. |
 | `shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
-| `shared/releases.json` | Per-fork release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers `-i/-rm/-l` and the dashboard's latest column. |
+| `shared/releases.json` | Per-fork release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers `-i/-u/-l` and the dashboard's latest column. |
 | `shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
 | `.github/workflows/ci.yml` | GitHub Actions entrypoint: Linux checks (`bash .github/ci/linux.sh`) + Windows checks (`.github/ci/windows.ps1` under pwsh 7 and 5.1). |
 | `.github/ci/linux.sh` | Linux CI: bash syntax, release self-check, sandbox dry-runs (checkout + flattened layouts), extensions.md coverage, version lockstep. |
@@ -74,7 +74,7 @@ Flow (apply/revert): `detect → plan → select → confirm → apply`.
    to `settings.json.bak`), install only *missing* extensions.
 
 Beyond apply/revert there are **release-driven actions** (`-i` install,
-`-rm` uninstall, `-l` list-versions) powered by the
+`-u` uninstall, `-l` list-versions) powered by the
 `version.*`/`release.*` modules and `releases.json`, and a **dashboard**
 (no flags) that wraps apply/reset/install/uninstall behind an
 interactive picker. Keep both ports in lockstep for these too.
@@ -118,7 +118,7 @@ bash linux/syncode.sh -r   # revert to factory defaults
 bash linux/syncode.sh -r -d  # revert plan only
 bash linux/syncode.sh -l   # installed vs latest versions
 bash linux/syncode.sh -i   # install latest stable (code/codium; -i codium = one fork)
-bash linux/syncode.sh -rm  # uninstall editors + config dirs
+bash linux/syncode.sh -u  # uninstall editors + config dirs
 bash linux/syncode.sh -h | -v  # help / version
 ```
 
@@ -132,7 +132,7 @@ irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -Out
 .\windows\syncode.ps1 -r -d  # revert plan only
 .\windows\syncode.ps1 -l # installed vs latest versions
 .\windows\syncode.ps1 -i # install latest stable (code/codium; -i codium = one fork)
-.\windows\syncode.ps1 -rm # uninstall editors + config dirs
+.\windows\syncode.ps1 -u # uninstall editors + config dirs
 .\windows\syncode.ps1 -h | -v  # help / version
 ```
 

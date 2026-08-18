@@ -10,9 +10,9 @@ param(
     [Alias('d')][switch]$DryRun,
     [Alias('r')][switch]$Revert,
     [Alias('i')][switch]$Install,
-    [Alias('rm')][switch]$Uninstall,
+    [Alias('u')][switch]$Uninstall,
     [Alias('l')][switch]$ListVersions,
-    # optional fork name after -i/-rm, passed through to syncode.ps1
+    # optional fork name after -i/-u, passed through to syncode.ps1
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
 

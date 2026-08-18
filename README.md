@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.s
 $p="$env:temp\s.ps1";irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile $p;& $p
 ```
 
-Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-rm`),
+Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-u`),
 e.g. append `-d` to the Windows one-liner (`...; & $p -d`) for a dry-run.
 Prefer cloning? The repo runs directly too — see [Usage](#usage).
 
@@ -63,7 +63,7 @@ bash linux/syncode.sh -r     # restore editors to factory defaults
 bash linux/syncode.sh -l     # show installed vs latest versions
 bash linux/syncode.sh -i     # install latest stable for all editors
 bash linux/syncode.sh -i codium   # install just VSCodium
-bash linux/syncode.sh -rm    # uninstall all editors + config dirs
+bash linux/syncode.sh -u    # uninstall all editors + config dirs
 ```
 
 **Windows (PowerShell):**
@@ -75,7 +75,7 @@ bash linux/syncode.sh -rm    # uninstall all editors + config dirs
 .\windows\syncode.ps1 -l     # show installed vs latest versions
 .\windows\syncode.ps1 -i     # install latest stable for all editors
 .\windows\syncode.ps1 -i codium       # install just VSCodium
-.\windows\syncode.ps1 -rm    # uninstall all editors + config dirs
+.\windows\syncode.ps1 -u    # uninstall all editors + config dirs
 ```
 
 ### Options
@@ -86,8 +86,8 @@ bash linux/syncode.sh -rm    # uninstall all editors + config dirs
 | `-v`, `--version` | Show version and exit |
 | `-d`, `--dry-run` | Show the plan for all editor families, apply nothing |
 | `-r`, `--revert` | Restore editors to factory defaults (see below) |
-| `-i`, `--install [fork]` | Install latest stable. Bare `-i` = all editors; `-i codium` = one fork (same for `-rm`) |
-| `-rm`, `--uninstall [fork]` | Remove the editor and its config dir |
+| `-i`, `--install [fork]` | Install latest stable. Bare `-i` = all editors; `-i codium` = one fork (same for `-u`) |
+| `-u`, `--uninstall [fork]` | Remove the editor and its config dir |
 | `-l`, `--list-versions` | Show installed vs latest versions, then exit |
 
 > **Windows note:** PowerShell is case-insensitive, so `-l` (lowercase L) is
@@ -172,7 +172,7 @@ shared/           settings.json + extensions.json + releases.json + extensions.m
 ```
 
 `releases.json` maps each editor fork to its release API, installer URLs,
-uninstall method, and winget id — it's what powers `-i/-rm/-l` and the
+uninstall method, and winget id — it's what powers `-i/-u/-l` and the
 dashboard's latest column. Version comparison lives in `version.sh`/`.ps1`;
 release lookups in `release.sh`/`.ps1`. Each module has a self-check that
 runs when executed directly (e.g. `bash linux/release.sh`).

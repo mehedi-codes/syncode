@@ -77,7 +77,7 @@ OPTIONS:
                     extensions. With -d: applies to all detected editors;
                     without -d: interactive selection like apply.
     -i, --install [fork]    install latest stable (code/codium; default all)
-    -rm, --uninstall [fork] remove editor and its config dir
+    -u, --uninstall [fork] remove editor and its config dir
     -l, --list-versions    show installed vs latest versions, then exit
 
 WHAT IT DOES:
@@ -109,7 +109,7 @@ while [[ $# -gt 0 ]]; do
     -r|--revert) REVERT=true; shift ;;
     -i|--install) ACTION=install; shift
       [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
-    -rm|--uninstall) ACTION=uninstall; shift
+    -u|--uninstall) ACTION=uninstall; shift
       [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
     -l|--list-versions) ACTION=list-versions; shift ;;
     *)
