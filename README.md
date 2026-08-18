@@ -8,98 +8,120 @@
 . ######::::: ##:::: ##::. ##:. ######::. #######:: ########:: ########:
 :......::::::..:::::..::::..:::......::::.......:::........:::........::
 ```
+
+# syncode
+
 > Sync and manage your VS Code and VSCodium editors.
 
-**Settings sync for VS Code and VSCodium, from one command.** `syncode`
-detects which editors are installed, shows you a plan, and — with
-your confirmation — copies `settings.json` and installs the extensions listed
-in `extensions.json`. Run it once to set up a new machine, or re-run it any
-time to bring an editor back in sync. It can also install or
-uninstall the editors themselves.
+**syncode** keeps your VS Code-style editors in sync from one command. It
+detects which editors you have, copies your settings in, and installs your
+extensions — so a fresh machine ends up with the same editor setup.
 
-## Supported editors
-
-| Fork | Config dir |
-| --- | --- |
-| VS Code | `Code` |
-| VSCodium | `VSCodium` |
-
-Two implementations, one per platform:
-
-| Platform | Tooling |
-| --- | --- |
-| **Linux** | `syncode.sh` + `install.sh` (bash 4+) |
-| **Windows** | `syncode.ps1` + `install.ps1` (PowerShell) |
+- **New machine?** Run it once and your editors are configured.
+- **Changed something?** Run it again — it only fills in what's missing.
+- **Curious?** Preview everything with `-d` before it touches anything.
 
 ## Install
 
-One-time runner — fetches the latest tool + config (no git, no cache) and
-runs it from a temp dir.
+One-line installers fetch the latest tool and config, then run from a temp
+folder (no git, no cache, nothing installed on your system).
 
-**Linux** (needs bash 4+ and curl):
+**Linux** — needs bash 4+ and curl:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o /tmp/syncode-install.sh && bash /tmp/syncode-install.sh
 ```
 
-**Windows** (PowerShell; needs no curl — uses `Invoke-RestMethod`):
+**Windows** — needs PowerShell 5.1+ (no curl):
 
 ```powershell
 $p="$env:temp\s.ps1";irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile $p;& $p
 ```
 
-Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-u`),
-e.g. append `-d` to the Windows one-liner (`...; & $p -d`) for a dry-run.
-Prefer cloning? The repo runs directly too — see [Usage](#usage).
+Flags pass through to the installer too — append `-d` for a safe dry-run,
+e.g. Windows: `...; & $p -d`.
 
-## Usage
+Prefer cloning? The repo runs directly as well — see [Usage](#usage).
 
-**Linux:**
+## Quick start
+
+Run it with no flags to open the interactive dashboard:
 
 ```bash
-bash linux/syncode.sh        # interactive dashboard (no flags)
-bash linux/syncode.sh -d     # preview the plan, change nothing
-bash linux/syncode.sh -r     # restore editors to factory defaults
-bash linux/syncode.sh -l     # show installed vs latest versions
-bash linux/syncode.sh -i     # install latest stable for all editors
-bash linux/syncode.sh -i codium   # install just VSCodium
-bash linux/syncode.sh -u    # uninstall all editors + config dirs
+bash linux/syncode.sh            # Linux
 ```
-
-**Windows (PowerShell):**
 
 ```powershell
-.\windows\syncode.ps1        # interactive dashboard (no flags)
-.\windows\syncode.ps1 -d     # preview the plan, change nothing
-.\windows\syncode.ps1 -r     # restore editors to factory defaults
-.\windows\syncode.ps1 -l     # show installed vs latest versions
-.\windows\syncode.ps1 -i     # install latest stable for all editors
-.\windows\syncode.ps1 -i codium       # install just VSCodium
-.\windows\syncode.ps1 -u    # uninstall all editors + config dirs
+.\windows\syncode.ps1            # Windows
 ```
 
-### Options
+What happens next:
 
-| Flag | Description |
-| --- | --- |
-| `-h`, `--help` | Show help and exit |
-| `-v`, `--version` | Show version and exit |
-| `-d`, `--dry-run` | Show the plan for all editor families, apply nothing |
-| `-r`, `--revert` | Restore editors to factory defaults (see below) |
-| `-i`, `--install [fork]` | Install latest stable. Bare `-i` = all editors; `-i codium` = one fork (same for `-u`) |
-| `-u`, `--uninstall [fork]` | Remove the editor and its config dir |
-| `-l`, `--list-versions` | Show installed vs latest versions, then exit |
+1. syncode **detects** your editors (VS Code, VSCodium).
+2. It shows you a **plan** — what's installed, what's out of date, what's out
+   of sync.
+3. If more than one editor is found, you **pick** which ones to apply to
+   (numbers toggle, `a` = all, `n` = none, Enter = apply).
+4. It **asks for confirmation** before changing anything.
+5. It **applies**: copies settings (backing up the old ones to
+   `settings.json.bak` first) and installs only the *missing* extensions.
+
+**Not sure yet?** `-d` shows the full plan and changes nothing — safe to run
+anywhere:
+
+```bash
+bash linux/syncode.sh -d         # Linux: preview the plan
+```
+
+```powershell
+.\windows\syncode.ps1 -d         # Windows: preview the plan
+```
+
+## Options
+
+| Flag | Long form (bash) | What it does |
+| --- | --- | --- |
+| `-h` | `--help` | Show help and exit |
+| `-v` | `--version` | Show version and exit |
+| `-d` | `--dry-run` | Show the plan, change nothing |
+| `-r` | `--revert` | Restore editors to factory defaults |
+| `-i` | `--install [fork]` | Install the latest stable editor (all forks by default) |
+| `-u` | `--uninstall [fork]` | Remove an editor and its config dir |
+| `-l` | `--list-versions` | Show installed vs latest versions, then exit |
 
 > **Windows note:** PowerShell is case-insensitive, so `-l` (lowercase L) is
-> the list-versions flag; the version flag is `-v`. The long form
-> `-ListVersions` also works.
+> the list-versions flag and `-v` is version; the long forms
+> `-Help`, `-ListVersions`, etc. also work there.
 
-### Interactive dashboard
+`[fork]` is `code` (VS Code) or `codium` (VSCodium). Bare `-i` / `-u` applies
+to every detected fork; `-i codium` targets just VSCodium.
 
-Run with no flags to get a live dashboard instead of the one-shot plan. Every
-pick repaints the whole screen (banner, status table, and menu); the last
-result (installed extension, help text, invalid input) stays visible as a
-notice line above the menu:
+### Examples
+
+```bash
+bash linux/syncode.sh            # interactive dashboard (no flags)
+bash linux/syncode.sh -d         # preview the plan, change nothing
+bash linux/syncode.sh -r         # restore editors to factory defaults
+bash linux/syncode.sh -l         # show installed vs latest versions
+bash linux/syncode.sh -i         # install latest stable for all editors
+bash linux/syncode.sh -i codium  # install just VSCodium
+bash linux/syncode.sh -u         # uninstall all editors + config dirs
+```
+
+```powershell
+.\windows\syncode.ps1            # interactive dashboard (no flags)
+.\windows\syncode.ps1 -d         # preview the plan, change nothing
+.\windows\syncode.ps1 -r         # restore editors to factory defaults
+.\windows\syncode.ps1 -l         # show installed vs latest versions
+.\windows\syncode.ps1 -i         # install latest stable for all editors
+.\windows\syncode.ps1 -i codium  # install just VSCodium
+.\windows\syncode.ps1 -u         # uninstall all editors + config dirs
+```
+
+## The interactive dashboard
+
+Run with no flags for a live dashboard. Every pick repaints the screen
+(banner, status table, menu); the last result stays visible as a notice line:
 
 ```
   +--------+-----------+-------------+----------+------------+
@@ -113,8 +135,7 @@ notice line above the menu:
 
   1. Visual Studio Code
   2. VSCodium
-  3. Help
-  4. Quit
+  3. Quit
 
   Enter an option: 1
 
@@ -124,9 +145,8 @@ notice line above the menu:
   2. Config
   3. Reset
   4. Uninstall
-  5. Help
-  6. Menu
-  7. Quit
+  5. Menu
+  6. Quit
 
   Enter an option: 2
 
@@ -134,9 +154,8 @@ notice line above the menu:
 
   1. Settings
   2. Extensions
-  3. Help
-  4. Menu
-  5. Quit
+  3. Menu
+  4. Quit
 
   Enter an option: 2
 
@@ -147,82 +166,114 @@ notice line above the menu:
   2. [ ] esbenp.prettier-vscode
   3. [ ] bradlc.vscode-tailwindcss
   a. All  n. None  i. Install selected  u. Uninstall selected
-  h. Help  m. Menu  q. Quit
+  m. Menu  q. Quit
 
   Enter an option:
 ```
 
-(When the output isn't a terminal — piped or in CI — the screen-clear is
-skipped and the frames stack, so transcripts stay readable.)
+- The status table reads per editor: **Installed** and **Latest** versions
+  (fetched live, cached per session), **Settings** sync state, and the
+  **Extensions** count of what's missing. Columns grow to fit; the header is
+  bold on a terminal.
+- **Config** (only offered when the editor is installed) splits into
+  **Settings** — copy the shared settings file, backing up to `.bak` — and
+  **Extensions** — the multiselect picker above.
+- **Reset** and **Uninstall** are destructive; syncode asks you to type the
+  word to confirm.
+- `Menu` returns to the editor list; `Quit` (or `q`) exits. Invalid input
+  just re-prompts.
 
-Each row shows installed vs latest version (fetched live from the official
-release APIs, cached per session), whether settings are in sync, and the
-missing-extension count; column widths grow with the longest value, and the
-header is bold on a terminal. Pick an editor (by its number), then an action
-from the numbered menu — `install`/`uninstall` manage the editor itself
-(downloads are written to a `syncode-*` temp file; Windows installs run
-`/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never launches
-on its own). `config` (only offered when the editor is installed) opens a
-submenu: `settings` copies the shared settings file (backing up to `.bak`),
-`extensions` opens the multiselect picker above — toggle extensions with
-their numbers, `a` selects all, `n` clears, then `i`/`u` install or uninstall
-the selection. `reset` and `uninstall` require typing the word to confirm;
-the Windows install action asks which installer variant to use.
-Every menu offers `Help`; `Menu` returns to the editor list, `Quit` (or `q`)
-exits; invalid input just re-prompts. Each menu's output is flush-left with
-the option list framed by blank lines; the last action's result (installed
-extensions, help text, invalid input, skipped confirmations) is shown as a
-notice line that survives the repaint.
+When the output isn't a terminal (piped, CI), the screen-clear is skipped and
+frames stack so transcripts stay readable.
 
-## What it does
+## Managing editors
 
-1. **Detect** — checks for `code`, `codium` on PATH or by config directory
-   (in parallel).
-2. **Plan** — prints a table (name / version / status) for all editor
-   families, marking not-installed ones.
-3. **Select** — when multiple editors are found, a toggle menu lets you pick
-   (numbers toggle, `a` = all, `n` = none, Enter = apply checked). With
-   `-d`, all detected editors are selected by default.
-4. **Confirm** — asks for confirmation (`Y/n`, defaults to yes).
-5. **Apply** — per editor, in order:
-   - **Settings**: if `settings.json` differs, the current one is backed up
-     to `settings.json.bak` and the repo copy is installed.
-   - **Extensions**: only missing extensions are installed (never
-     re-installs, never touches extensions you added yourself).
+### Check versions (`-l`)
 
-### Idempotent & safe
-
-- Running it twice is a no-op — settings already in sync and extensions
-  already installed are skipped.
-- The previous settings are always preserved in `settings.json.bak` before
-  any overwrite.
-- Extensions you install on top of syncode's list are left alone.
-
-## Reverting (factory defaults)
+Shows installed vs latest for every fork, then exits.
 
 ```bash
-bash linux/syncode.sh -r      # interactive selection, then confirm
-bash linux/syncode.sh -r -d   # plan for all editor families, apply nothing
+bash linux/syncode.sh -l
 ```
 
 ```powershell
-.\windows\syncode.ps1 -r      # interactive selection, then confirm
-.\windows\syncode.ps1 -r -d   # plan for all editor families, apply nothing
+.\windows\syncode.ps1 -l
 ```
 
-For each selected editor, revert:
+### Install an editor (`-i`)
+
+Downloads and installs the latest stable release (VS Code or VSCodium) —
+needed if you only have one of the two.
+
+```bash
+bash linux/syncode.sh -i codium   # install just VSCodium
+```
+
+```powershell
+.\windows\syncode.ps1 -i codium   # install just VSCodium
+```
+
+### Uninstall an editor (`-u`)
+
+Removes the editor binary *and* its config directory. Windows installs run
+`/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never launches on
+its own.
+
+```bash
+bash linux/syncode.sh -u code
+```
+
+```powershell
+.\windows\syncode.ps1 -u code
+```
+
+### Revert to factory defaults (`-r`)
+
+For each selected editor:
 
 1. Restores `settings.json.bak` → `settings.json` if a backup exists,
-   otherwise deletes `settings.json` (editor returns to built-in defaults).
-2. Uninstalls the extensions listed in `extensions.json` (only the ones
-   syncode manages).
+   otherwise deletes `settings.json` (back to built-in defaults).
+2. Uninstalls every extension listed in `extensions.json` (only the ones
+   syncode manages — never yours).
 
-## Files
+```bash
+bash linux/syncode.sh -r        # interactive selection, then confirm
+bash linux/syncode.sh -r -d     # plan for all editor families, apply nothing
+```
+
+```powershell
+.\windows\syncode.ps1 -r        # interactive selection, then confirm
+.\windows\syncode.ps1 -r -d     # plan for all editor families, apply nothing
+```
+
+## How it works
+
+Flow: **detect → plan → select → confirm → apply.**
+
+1. **Detect** — checks for `code`, `codium` on PATH or by config directory
+   (in parallel).
+2. **Plan** — prints a name / version / status table, marking what's not
+   installed.
+3. **Select** — a toggle menu when multiple editors are found.
+4. **Confirm** — asks for confirmation (`Y/n`, defaults to yes).
+5. **Apply** — per editor: copy settings (backing up to `.bak` first), then
+   install only *missing* extensions.
+
+### Idempotent & safe
+
+- Running it twice is a no-op — anything already in sync is skipped.
+- Previous settings are always preserved in `settings.json.bak` before an
+  overwrite.
+- Extensions you install on top of syncode's list are left alone.
+- Every subprocess that could eat your keystrokes runs with stdin closed, so
+  interactive prompts are never swallowed.
+
+## Project layout
 
 ```
 install.sh        one-time runner (root — curl-fetches tool + configs)
 install.ps1       one-time runner (root — irm/Invoke-WebRequest fetches + runs)
-linux/            syncode.sh + version.sh + release.sh — Linux deploy (bash)
+linux/            syncode.sh + version.sh + release.sh — Linux (bash 4+)
 windows/          syncode.ps1 + version.ps1 + release.ps1 — Windows (PowerShell)
 shared/           settings.json + extensions.json + releases.json + extensions.md
                   (configs live in shared/; scripts find them via ../shared in a
@@ -230,19 +281,19 @@ shared/           settings.json + extensions.json + releases.json + extensions.m
 ```
 
 `releases.json` maps each editor fork to its release API, installer URLs,
-uninstall method, and winget id — it's what powers `-i/-u/-l` and the
-dashboard's latest column. Version comparison lives in `version.sh`/`.ps1`;
-release lookups in `release.sh`/`.ps1`. Each module has a self-check that
-runs when executed directly (e.g. `bash linux/release.sh`).
+uninstall method, and winget id — it powers `-i/-u/-l` and the dashboard's
+latest column. Version comparison lives in `version.sh`/`version.ps1`;
+release lookups in `release.sh`/`release.ps1`. Each module self-checks when
+run directly (e.g. `bash linux/release.sh`).
 
-## Notes
+## Requirements & notes
 
-- **Linux** needs **bash 4+** and curl; **Windows** needs **PowerShell**
-  (5.1 or 7+; no curl required).
+- **Linux** needs bash 4+ and curl. **Windows** needs PowerShell 5.1+
+  (no curl).
 - Extensions are installed from the marketplace your editor uses (e.g.
-  Open VSX for VSCodium). Proprietary extensions (GitHub Copilot) that have
-  no marketplace equivalent will fail to install — syncode reports the
+  Open VSX for VSCodium). Proprietary extensions like GitHub Copilot that
+  have no marketplace equivalent will fail to install — syncode reports the
   failure and continues.
-- Fonts, terminal default profiles, and other machine-specific settings are
-  not portable across OSes; keep those out of `settings.json` or expect to
-  adjust per machine.
+- Fonts, terminal default profiles, and other machine-specific settings
+  aren't portable across OSes — keep them out of `settings.json` or expect
+  to adjust per machine.
