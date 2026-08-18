@@ -9,7 +9,7 @@
 :......::::::..:::::..::::..:::......::::.......:::........:::........::
 ```
 
-> Sync and manage your VS Code and VSCodium editors.
+> Sync and manage your VSCode and VSCodium editors.
 
 **syncode** keeps your VS Code-style editors in sync from one command. It
 detects which editors you have, copies your settings in, and installs your
@@ -122,22 +122,22 @@ Run with no flags for a live dashboard. Every pick repaints the screen
 (banner, status table, menu); the last result stays visible as a notice line:
 
 ```
-  +--------+-----------+-------------+----------+------------+
-  | Name   | Installed | Latest      | Settings | Extensions |
-  +--------+-----------+-------------+----------+------------+
-  | code   | 1.132.0   | 1.133.0     | synced   | 2 missing  |
-  | codium | 1.126.0   | 1.126.04524 | diverged | 1 missing  |
-  +--------+-----------+-------------+----------+------------+
+  +----------+-----------+-------------+----------+------------+
+  | Name     | Installed | Latest      | Settings | Extensions |
+  +----------+-----------+-------------+----------+------------+
+  | VSCode   | 1.132.0   | 1.133.0     | synced   | 2 missing  |
+  | VSCodium | 1.126.0   | 1.126.04524 | diverged | 1 missing  |
+  +----------+-----------+-------------+----------+------------+
 
   Pick an option:
 
-  1. Visual Studio Code
+  1. VSCode
   2. VSCodium
   3. Quit
 
   Enter an option: 1
 
-  Pick an option for Visual Studio Code:
+  Pick an option for VSCode:
 
   1. Install
   2. Config
@@ -148,7 +148,7 @@ Run with no flags for a live dashboard. Every pick repaints the screen
 
   Enter an option: 2
 
-  Pick an option for Visual Studio Code:
+  Pick an option for VSCode:
 
   1. Settings
   2. Extensions
@@ -157,7 +157,7 @@ Run with no flags for a live dashboard. Every pick repaints the screen
 
   Enter an option: 2
 
-  Visual Studio Code extensions
+  VSCode extensions
   Pick an option:
 
   1. [x] ms-python.python

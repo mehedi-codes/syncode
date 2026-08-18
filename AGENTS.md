@@ -87,7 +87,7 @@ flush-left with blank lines framing the option list. The status table is a
 output stays byte-identical between ports): column widths = longest cell
 (header or value) + 2 padding so nothing overflows, headers are Title Case
 and bold on a TTY, and the editor's name is folded into the menu prompt
-(`Pick an option for Visual Studio Code:`). Feedback (installed
+(`Pick an option for VSCode:`). Feedback (installed
 extensions, invalid input, skipped confirmations) goes to the
 notice line so it survives the repaint; bash keeps it in `DASH_NOTICE`, ps1 in
 `$script:Notice`. Non-terminal output skips the clear and stacks frames.

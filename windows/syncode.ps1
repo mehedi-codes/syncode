@@ -1,5 +1,5 @@
 # ============================================================
-#  syncode.ps1 - Sync and manage your VS Code and VSCodium editors.
+#  syncode.ps1 - Sync and manage your VSCode and VSCodium editors.
 #  Windows / PowerShell version (Windows only).
 #  Version: 1.4.0
 # ============================================================
@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 
 $VERSION_STR = "1.4.0"
 $TOOL_NAME = "syncode"
-$DESCRIPTION = "Sync and manage your VS Code and VSCodium editors"
+$DESCRIPTION = "Sync and manage your VSCode and VSCodium editors"
 
 $BANNER = @'
 :'######::'##:::'##:'##::: ##::'######:::'#######::'########::'########:
@@ -55,6 +55,10 @@ function Write-LogError { Write-Error $args }
 # (pipes, CI) falls back to plain text.
 $script:CanAnsi = $false
 if (-not [Console]::IsOutputRedirected) {
+    # Real console: force UTF-8 output so [Console]::Write can carry Unicode
+    # glyphs. Legacy codepages (cp437/850) convert anything outside their set
+    # to '?' - VT-era conhost and Windows Terminal both decode UTF-8 fine.
+    try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
     try {
         if ($PSVersionTable.PSVersion.Major -ge 7) {
             $script:CanAnsi = $true
@@ -77,6 +81,18 @@ public static extern bool SetConsoleMode(System.IntPtr hConsoleHandle, uint dwMo
         $script:CanAnsi = $false
     }
 }
+
+# The braille ring needs a Unicode-capable console output encoding, not just
+# ANSI/VT (cp437/850 would render the glyphs as '?'), so gate it separately.
+# The OutputEncoding set above makes this true whenever we have a real console.
+$script:CanUnicode = $false
+if (-not [Console]::IsOutputRedirected) {
+    try { $script:CanUnicode = ([Console]::OutputEncoding.CodePage -eq 65001) } catch { $script:CanUnicode = $false }
+}
+
+# Braille dot-ring spinner (U+2800 block). Built from codepoints so this file
+# stays pure ASCII (CI enforces ASCII ps1; 5.1 reads BOM-less UTF-8 as ANSI).
+$script:SpinnerFrames = -join (0x280B, 0x2819, 0x2839, 0x2838, 0x283C, 0x2834, 0x2826, 0x2827, 0x2807, 0x280F | ForEach-Object { [char]$_ })
 
 # Write-ProgressLine <label> <name> <pct> <frame> - single \r line: spinner at
 # start, a solid white background block behind the centered temp filename, real
@@ -117,7 +133,7 @@ function Write-ProgressLine($label, $name, $pct, $frame) {
 # live progress line (real % from Content-Length; spinner-only if the server
 # omits it). Throws on failure (temp file cleaned up).
 function Get-Download($fork, $ver, $url, $tmp) {
-    $frames = "|/-\"
+    $frames = if ($script:CanUnicode) { $script:SpinnerFrames } else { "|/-\" }
     $i = 0
     $label = "  ${fork}: downloading"
     $name = Split-Path $tmp -Leaf
@@ -139,7 +155,7 @@ function Get-Download($fork, $ver, $url, $tmp) {
             $done += $n
             if ($sw.ElapsedMilliseconds -ge 100) {
                 if ($total -gt 0) { $pct = [int](($done * 100) / $total) }
-                Write-ProgressLine $label $name $pct $frames[$i % 4]
+                Write-ProgressLine $label $name $pct $frames[$i % $frames.Length]
                 $i++
                 $sw.Restart()
             }
@@ -157,10 +173,10 @@ function Get-Download($fork, $ver, $url, $tmp) {
 # Wait-ProcessSpinner <label> <proc> - spinner while an installer/uninstaller
 # runs (no % available for silent installers; editors self-update).
 function Wait-ProcessSpinner($label, $p) {
-    $frames = "|/-\"
+    $frames = if ($script:CanUnicode) { $script:SpinnerFrames } else { "|/-\" }
     $i = 0
     while (-not $p.HasExited) {
-        Write-ProgressLine $label "" -1 $frames[$i % 4]
+        Write-ProgressLine $label "" -1 $frames[$i % $frames.Length]
         $i++
         Start-Sleep -Milliseconds 120
     }
@@ -192,7 +208,7 @@ OPTIONS:
     -l, --list-versions     show installed vs latest versions, then exit
 
 WHAT IT DOES:
-    Detects installed editors (VS Code, VSCodium),
+    Detects installed editors (VSCode, VSCodium),
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected. With no flags, opens the interactive dashboard
@@ -223,7 +239,7 @@ $FORK_DIR = @{
 }
 $FORK_ORDER = @("code", "codium")
 $FORK_FULL = @{
-    code      = "Visual Studio Code"
+    code      = "VSCode"
     codium    = "VSCodium"
 }
 
@@ -445,7 +461,7 @@ function Show-Dashboard {
         } else {
             $ext = "n/a"
         }
-        $rows += ,@($f, $inst, $latest, $settings, $ext)
+        $rows += ,@($FORK_FULL[$f], $inst, $latest, $settings, $ext)
     }
     $w = @()
     for ($i = 0; $i -lt 5; $i++) {
@@ -491,7 +507,12 @@ function Show-Frame($notice) {
     Show-Banner
     Write-Output ""
     Show-Dashboard
-    if ($notice) { Write-Output $notice }
+    # blank line between the status table and the notice, matching the
+    # blank line before the menu, so notices read as their own line.
+    if ($notice) {
+        Write-Output ""
+        Write-Output $notice
+    }
     Write-Output ""
 }
 
@@ -514,7 +535,7 @@ function Install-Editor($fork, $variant = "win") {
     } else {
         $p = Start-Process -FilePath $tmp -ArgumentList "/VERYSILENT", "/NORESTART", "/mergetasks=!runcode" -PassThru
     }
-    Wait-ProcessSpinner "  ${fork}: installing $ver" $p
+    Wait-ProcessSpinner "  ${fork}: Installing $ver" $p
     Remove-Item -Force $tmp
     if ($p.ExitCode -ne 0) { throw "${fork}: installer failed (exit $($p.ExitCode))" }
     Write-Output "$fork installed"
@@ -541,7 +562,7 @@ function Uninstall-Editor($fork) {
     }
     if ($un) {
         $p = Start-Process -FilePath $un -ArgumentList "/VERYSILENT", "/NORESTART" -PassThru
-        Wait-ProcessSpinner "  ${fork}: uninstalling" $p
+        Wait-ProcessSpinner "  ${fork}: Uninstalling" $p
         if ($p.ExitCode -ne 0) { Write-LogWarn "${fork}: uninstaller exit $($p.ExitCode)" }
     } else {
         $id = Get-ReleaseWinget $fork
@@ -556,31 +577,38 @@ function Uninstall-Editor($fork) {
 }
 
 # Select-InstallVariant <fork> - dashboard sub-prompt for installer variant.
-# Returns a releases.json installer key; Enter/empty = "win" (user, current default).
+# Same framed layout as the other menus (header, gap, numbered options, gap,
+# "Enter an option: "); returns a releases.json installer key, or "menu"/
+# "quit" for the nav options. Enter/empty/invalid = "win" (user, default).
+# Write-Host, not Write-Output: the caller assigns the result, so
+# Write-Output lines would leak into $variant.
 function Select-InstallVariant($fork) {
-    if ($fork -eq "code") {
-        Write-Output "installer variant:"
-        Write-Output "1. User Installer"
-        Write-Output "2. System Installer"
-        $line = Read-Line "pick (default 1=User): "
-        if ($null -ne $line) { $line = $line.Trim() }
-        switch ($line) {
-            "2" { return "winSystem" }
-            "1" { return "win" }
-            default { return "win" }
-        }
+    $opts = @()
+    $opts += ,@("User Installer", "win")
+    $opts += ,@("System Installer", "winSystem")
+    if ($fork -eq "codium") { $opts += ,@("Microsoft Software Installer", "winMsi") }
+    $opts += @("Menu", "menu"), @("Quit", "quit")
+    Write-Host "Select a variant:"
+    Write-Host ""
+    for ($i = 0; $i -lt $opts.Count; $i++) {
+        Write-Host ("{0}. {1}" -f ($i + 1), $opts[$i][0])
     }
-    Write-Output "installer variant:"
-    Write-Output "1. User Installer"
-    Write-Output "2. System Installer"
-    Write-Output "3. MSI (updates enabled)"
-    $line = Read-Line "pick (default 1=User): "
+    Write-Host ""
+    $line = Read-Line "Enter an option: "
     if ($null -ne $line) { $line = $line.Trim() }
-    switch ($line) {
-        "2" { return "winSystem" }
-        "3" { return "winMsi" }
-        "1" { return "win" }
-        default { return "win" }
+    if ($line -match '^\d+$') {
+        $n = [int]$line - 1
+        if ($n -ge 0 -and $n -lt $opts.Count) { return $opts[$n][1] }
+        return "win"
+    }
+    switch ($line.ToLower()) {
+        "user"   { return "win" }
+        "system" { return "winSystem" }
+        "msi"    { return "winMsi" }
+        "menu"   { return "menu" }
+        "quit"   { return "quit" }
+        "q"      { return "quit" }
+        default  { return "win" }
     }
 }
 
@@ -673,7 +701,7 @@ function Run-Dashboard {
             Show-Frame $script:Notice
             Write-Output "Pick an option:"
             Write-Output ""
-            Write-Output "1. Visual Studio Code"
+            Write-Output "1. VSCode"
             Write-Output "2. VSCodium"
             Write-Output "3. Quit"
             Write-Output ""
@@ -691,13 +719,15 @@ function Run-Dashboard {
                 default  { $script:Notice = "invalid: $line"; continue editorpick }
             }
         }
-        $action = ""
         :actionpick while ($true) {
-            # Config only makes sense when the editor is installed
+            # Config/Reset only make sense when the editor is installed
             $opts = @()
             $opts += ,@("Install", "install")
-            if (Get-InstalledVersion $editor) { $opts += ,@("Config", "config") }
-            $opts += @("Reset", "reset"), @("Uninstall", "uninstall"), @("Menu", "menu"), @("Quit", "quit")
+            if (Get-InstalledVersion $editor) {
+                $opts += ,@("Config", "config")
+                $opts += ,@("Reset", "reset")
+            }
+            $opts += @("Uninstall", "uninstall"), @("Menu", "menu"), @("Quit", "quit")
             Show-Frame $script:Notice
             Write-Output "Pick an option for $($FORK_FULL[$editor]):"
             Write-Output ""
@@ -716,75 +746,85 @@ function Run-Dashboard {
                 $sel = $line.ToLower()
             }
             switch ($sel) {
-                "install"   { $action = "install"; break actionpick }
-                "config"    { $action = "config"; break actionpick }
-                "reset"     { $action = "reset"; break actionpick }
-                "uninstall" { $action = "uninstall"; break actionpick }
+                "install" {
+                    # handlers run inside the actionpick loop so the frame
+                    # repaints in place (same editor's action menu); only
+                    # Menu/Quit leave it. The stale action menu is cleared
+                    # before the variant pick, then again before the download,
+                    # so each stage renders on a fresh frame.
+                    if (Get-InstalledVersion $editor) {
+                        $script:Notice = "$editor already installed"
+                    } else {
+                        Show-Frame ""
+                        $variant = Select-InstallVariant $editor
+                        if ($variant -eq "menu") { continue actionpick }
+                        if ($variant -eq "quit") { Write-Output "bye."; exit 0 }
+                        $script:Notice = "Installing $($FORK_FULL[$editor])..."
+                        Show-Frame $script:Notice
+                        try { Install-Editor $editor $variant; $script:Notice = "$editor installed" }
+                        catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
+                    }
+                    continue actionpick
+                }
+                "config" {
+                    :configpick while ($true) {
+                        Show-Frame $script:Notice
+                        Write-Output "Pick an option for $($FORK_FULL[$editor]):"
+                        Write-Output ""
+                        Write-Output "1. Settings"
+                        Write-Output "2. Extensions"
+                        Write-Output "3. Menu"
+                        Write-Output "4. Quit"
+                        Write-Output ""
+                        $line = Read-Line "Enter an option: "
+                        if ($null -eq $line) { Write-Output "bye."; exit 0 }
+                        $line = $line.Trim()
+                        switch ($line) {
+                            "1" {
+                                try { Apply-Fork $editor "settings" }
+                                catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
+                                continue configpick
+                            }
+                            "2" { Pick-Extensions $editor; continue configpick }
+                            "3" { continue main }
+                            "4" { Write-Output "bye."; exit 0 }
+                            "q" { Write-Output "bye."; exit 0 }
+                            "Q" { Write-Output "bye."; exit 0 }
+                            default { $script:Notice = "invalid: $line"; continue configpick }
+                        }
+                    }
+                }
+                "reset" {
+                    $line = Read-Line 'Type "reset" to confirm: '
+                    if ($null -ne $line -and $line.Trim() -eq "reset") {
+                        try {
+                            $Revert = $true; Apply-Fork $editor; $Revert = $false
+                            $script:Notice = "$editor reset to factory defaults"
+                        } catch {
+                            $Revert = $false
+                            $script:Notice = "[ERROR] $($_.Exception.Message)"
+                        }
+                    } else {
+                        $script:Notice = "not confirmed - skipped"
+                    }
+                    continue actionpick
+                }
+                "uninstall" {
+                    $line = Read-Line 'Type "uninstall" to confirm: '
+                    if ($null -ne $line -and $line.Trim() -eq "uninstall") {
+                        $script:Notice = "Uninstalling $($FORK_FULL[$editor])..."
+                        Show-Frame $script:Notice
+                        try { Uninstall-Editor $editor; $script:Notice = "$editor uninstalled" }
+                        catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
+                    } else {
+                        $script:Notice = "not confirmed - skipped"
+                    }
+                    continue actionpick
+                }
                 "menu"      { continue main }
                 "quit"      { Write-Output "bye."; exit 0 }
                 "q"         { Write-Output "bye."; exit 0 }
                 default     { $script:Notice = "invalid: $line"; continue actionpick }
-            }
-        }
-        switch ($action) {
-            "config" {
-                :configpick while ($true) {
-                    Show-Frame $script:Notice
-                    Write-Output "Pick an option for $($FORK_FULL[$editor]):"
-                    Write-Output ""
-                    Write-Output "1. Settings"
-                    Write-Output "2. Extensions"
-                    Write-Output "3. Menu"
-                    Write-Output "4. Quit"
-                    Write-Output ""
-                    $line = Read-Line "Enter an option: "
-                    if ($null -eq $line) { Write-Output "bye."; exit 0 }
-                    $line = $line.Trim()
-                    switch ($line) {
-                        "1" {
-                            try { Apply-Fork $editor "settings" }
-                            catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
-                            continue configpick
-                        }
-                        "2" { Pick-Extensions $editor; continue configpick }
-                        "3" { continue main }
-                        "4" { Write-Output "bye."; exit 0 }
-                        "q" { Write-Output "bye."; exit 0 }
-                        "Q" { Write-Output "bye."; exit 0 }
-                        default { $script:Notice = "invalid: $line"; continue configpick }
-                    }
-                }
-            }
-            "reset" {
-                $line = Read-Line 'Type "reset" to confirm: '
-                if ($null -ne $line -and $line.Trim() -eq "reset") {
-                    try {
-                        $Revert = $true; Apply-Fork $editor; $Revert = $false
-                        $script:Notice = "$editor reset to factory defaults"
-                    } catch {
-                        $Revert = $false
-                        $script:Notice = "[ERROR] $($_.Exception.Message)"
-                    }
-                } else {
-                    $script:Notice = "not confirmed - skipped"
-                }
-            }
-            "uninstall" {
-                $line = Read-Line 'Type "uninstall" to confirm: '
-                if ($null -ne $line -and $line.Trim() -eq "uninstall") {
-                    try { Uninstall-Editor $editor; $script:Notice = "$editor uninstalled" }
-                    catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
-                } else {
-                    $script:Notice = "not confirmed - skipped"
-                }
-            }
-            "install" {
-                if (Get-InstalledVersion $editor) {
-                    $script:Notice = "$editor already installed"
-                } else {
-                    try { Install-Editor $editor (Select-InstallVariant $editor); $script:Notice = "$editor installed" }
-                    catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
-                }
             }
         }
     }

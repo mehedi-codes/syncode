@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-#  syncode - Sync and manage your VS Code and VSCodium editors
+#  syncode - Sync and manage your VSCode and VSCodium editors
 #  Version: 1.4.0
 # ============================================================
 set -Eeuo pipefail
 
 VERSION="1.4.0"
 TOOL_NAME="syncode"
-DESCRIPTION="Sync and manage your VS Code and VSCodium editors"
+DESCRIPTION="Sync and manage your VSCode and VSCodium editors"
 
 BANNER="$(cat <<'BANNER_EOF'
 :'######:'##:::'##'##::: ##:'######::'#######:'########:'########:
@@ -81,7 +81,7 @@ OPTIONS:
     -l, --list-versions    show installed vs latest versions, then exit
 
 WHAT IT DOES:
-    Detects installed editors (VS Code, VSCodium),
+    Detects installed editors (VSCode, VSCodium),
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected. With no flags, opens the interactive dashboard
@@ -151,7 +151,7 @@ FORK_ORDER=(code codium)
 
 # fork -> full display name (dashboard menus)
 declare -A FORK_FULL=(
-  [code]="Visual Studio Code"
+  [code]="VSCode"
   [codium]="VSCodium"
 )
 
@@ -444,7 +444,7 @@ render_dashboard() {
     else
       ext="n/a"
     fi
-    rows+=("$f|$inst|$latest|$settings|$ext")
+    rows+=("${FORK_FULL[$f]}|$inst|$latest|$settings|$ext")
   done
   for i in 0 1 2 3 4; do
     w[$i]=${#hdr[$i]}
@@ -487,7 +487,12 @@ redraw_frame() {
   banner
   echo ""
   render_dashboard
-  [[ -n "${1:-}" ]] && printf '%s\n' "$1"
+  # blank line between the status table and the notice, matching the
+  # blank line before the menu, so notices read as their own line.
+  if [[ -n "${1:-}" ]]; then
+    echo ""
+    printf '%s\n' "$1"
+  fi
   echo ""
 }
 
@@ -538,6 +543,12 @@ draw_line() {
 download_with_progress() {
   local fork="$1" ver="$2" url="$3" tmp="$4"
   local total=0 frames='|/-\' i=0 done=0 pct=-1 pid name label
+  # braille dot ring (U+2800 block; \u escapes keep this file ASCII like the
+  # ps1 port) on a real UTF-8 terminal, plain |/-\ elsewhere (non-UTF-8
+  # locales index strings by byte and would garble the ring)
+  if [[ -t 1 && "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" == *[Uu][Tt][Ff]-?8* ]]; then
+    printf -v frames '\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f'
+  fi
   total="$(curl -fsSLI --max-time 30 "${url//<ver>/$ver}" 2>/dev/null \
     | awk 'tolower($1)=="content-length:"{print $2}' | tr -d '\r' | tail -n1)"
   [[ "$total" =~ ^[0-9]+$ ]] || total=0
@@ -550,7 +561,7 @@ download_with_progress() {
       done="$(stat -c %s "$tmp" 2>/dev/null || echo 0)"
       pct=$(( done * 100 / total ))
     fi
-    draw_line "$label" "$name" "$pct" "${frames:$((i%4)):1}"
+    draw_line "$label" "$name" "$pct" "${frames:$((i % ${#frames})):1}"
     i=$((i+1))
     sleep 0.1
   done
@@ -573,7 +584,7 @@ install_editor() {
   local fork="$1" ver="$2" url tmp dest
   ver="${ver:-$(latest_for "$fork")}"
   [[ "$ver" == "unknown" ]] && { log_error "$fork: can't determine latest version"; return 1; }
-  echo "$fork: installing $ver ..."
+  echo "$fork: Installing $ver..."
   if command -v apt-get >/dev/null 2>&1; then
     url="$(release_installer_url "$fork" linux)"
     tmp="$(mktemp --suffix=.deb)"
@@ -729,7 +740,7 @@ run_dashboard() {
       redraw_frame "$DASH_NOTICE"
       echo "Pick an option:"
       echo ""
-      echo "1. Visual Studio Code"
+      echo "1. VSCode"
       echo "2. VSCodium"
       echo "3. Quit"
       echo ""
@@ -745,8 +756,8 @@ run_dashboard() {
     while true; do
       local opts=()
       opts+=(Install)
-      if [[ -n "$(get_installed_version "$editor")" ]]; then opts+=(Config); fi
-      opts+=(Reset Uninstall Menu Quit)
+      if [[ -n "$(get_installed_version "$editor")" ]]; then opts+=(Config Reset); fi
+      opts+=(Uninstall Menu Quit)
       redraw_frame "$DASH_NOTICE"
       echo "Pick an option for ${FORK_FULL[$editor]}:"
       echo ""
@@ -769,66 +780,71 @@ run_dashboard() {
         sel="$action"
       fi
       case "${sel,,}" in
-        install) action="install"; break ;;
-        config) action="config"; break ;;
-        reset) action="reset"; break ;;
-        uninstall) action="uninstall"; break ;;
+        install)
+          # handlers run inside the actionpick loop so the frame repaints
+          # in place (same editor's action menu); only Menu/Quit leave it.
+          if [[ -n "$(get_installed_version "$editor")" ]]; then
+            DASH_NOTICE="$editor already installed"
+          else
+            # redraw before the slow download so progress renders under a
+            # fresh frame, not the stale menu the user just picked from.
+            DASH_NOTICE="Installing ${FORK_FULL[$editor]}..."
+            redraw_frame "$DASH_NOTICE"
+            install_editor "$editor" || true
+            DASH_NOTICE="$editor installed"
+          fi
+          continue
+          ;;
+        config)
+          while true; do
+            redraw_frame "$DASH_NOTICE"
+            echo "Pick an option for ${FORK_FULL[$editor]}:"
+            echo ""
+            echo "1. Settings"
+            echo "2. Extensions"
+            echo "3. Menu"
+            echo "4. Quit"
+            echo ""
+            read -r -p "Enter an option: " line || line="q"
+            line="${line%$'\r'}"
+            case "$line" in
+              1) apply_fork "$editor" settings || true ;;
+              2) pick_extensions "$editor" ;;
+              3) continue 3 ;;
+              4|q|Q) echo "bye."; exit 0 ;;
+              *) DASH_NOTICE="invalid: $line" ;;
+            esac
+          done
+          ;;
+        reset)
+          read -r -p 'Type "reset" to confirm: ' line || line=""
+          line="${line%$'\r'}"
+          if [[ "$line" == "reset" ]]; then
+            REVERT=true; apply_fork "$editor" || true; REVERT=false
+            DASH_NOTICE="$editor reset to factory defaults"
+          else
+            DASH_NOTICE="not confirmed - skipped"
+          fi
+          continue
+          ;;
+        uninstall)
+          read -r -p 'Type "uninstall" to confirm: ' line || line=""
+          line="${line%$'\r'}"
+          if [[ "$line" == "uninstall" ]]; then
+            DASH_NOTICE="Uninstalling ${FORK_FULL[$editor]}..."
+            redraw_frame "$DASH_NOTICE"
+            uninstall_editor "$editor" || true
+            DASH_NOTICE="$editor uninstalled"
+          else
+            DASH_NOTICE="not confirmed - skipped"
+          fi
+          continue
+          ;;
         menu) continue 2 ;;
         quit|q) echo "bye."; exit 0 ;;
         *) DASH_NOTICE="invalid: $action" ;;
       esac
     done
-    case "$action" in
-      config)
-        while true; do
-          redraw_frame "$DASH_NOTICE"
-          echo "Pick an option for ${FORK_FULL[$editor]}:"
-          echo ""
-          echo "1. Settings"
-          echo "2. Extensions"
-          echo "3. Menu"
-          echo "4. Quit"
-          echo ""
-          read -r -p "Enter an option: " line || line="q"
-          line="${line%$'\r'}"
-          case "$line" in
-            1) apply_fork "$editor" settings || true ;;
-            2) pick_extensions "$editor" ;;
-            3) continue 2 ;;
-            4|q|Q) echo "bye."; exit 0 ;;
-            *) DASH_NOTICE="invalid: $line" ;;
-          esac
-        done
-        ;;
-      reset)
-        read -r -p 'Type "reset" to confirm: ' line || line=""
-        line="${line%$'\r'}"
-        if [[ "$line" == "reset" ]]; then
-          REVERT=true; apply_fork "$editor" || true; REVERT=false
-          DASH_NOTICE="$editor reset to factory defaults"
-        else
-          DASH_NOTICE="not confirmed - skipped"
-        fi
-        ;;
-      uninstall)
-        read -r -p 'Type "uninstall" to confirm: ' line || line=""
-        line="${line%$'\r'}"
-        if [[ "$line" == "uninstall" ]]; then
-          uninstall_editor "$editor" || true
-          DASH_NOTICE="$editor uninstalled"
-        else
-          DASH_NOTICE="not confirmed - skipped"
-        fi
-        ;;
-      install)
-        if [[ -n "$(get_installed_version "$editor")" ]]; then
-          DASH_NOTICE="$editor already installed"
-        else
-          install_editor "$editor" || true
-          DASH_NOTICE="$editor installed"
-        fi
-        ;;
-    esac
   done
 }
 
