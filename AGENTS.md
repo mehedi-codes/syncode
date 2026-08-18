@@ -76,8 +76,11 @@ Flow (apply/revert): `detect → plan → select → confirm → apply`.
 Beyond apply/revert there are **release-driven actions** (`-i` install,
 `-u` uninstall, `-l` list-versions) powered by the
 `version.*`/`release.*` modules and `releases.json`, and a **dashboard**
-(no flags) that wraps apply/reset/install/uninstall behind an
-interactive picker. Keep both ports in lockstep for these too.
+(no flags) that wraps install/config/reset/uninstall behind an interactive
+picker — `config` (only for installed editors) splits into a
+settings/extensions submenu, and extensions uses a multiselect picker
+(toggle numbers, `a`=all, `n`=none, `i`/`u` install/uninstall selection).
+Keep both ports in lockstep for these too.
 
 ### Platform handling
 

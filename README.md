@@ -103,18 +103,57 @@ Run with no flags to get a live dashboard instead of the one-shot plan:
   code     1.132.0      1.133.0     synced    2 missing
   codium   1.126.04524  1.126.04524 diverged  1 missing
 
-  pick editor (1=code 2=codium, q=quit)
-  action for code (install/config/reset/uninstall/help, q=quit)
+  Pick an option:
+    1. Visual Studio Code
+    2. VSCodium
+    3. Help
+    4. Quit
+  Enter an option: 1
+
+  Visual Studio Code
+  Pick an option:
+    1. Install
+    2. Config
+    3. Reset
+    4. Uninstall
+    5. Help
+    6. Menu
+    7. Quit
+  Enter an option: 2
+
+  Visual Studio Code
+  Pick an option:
+    1. Settings
+    2. Extensions
+    3. Help
+    4. Menu
+    5. Quit
+  Enter an option: 2
+
+  Visual Studio Code extensions
+    1. [x] ms-python.python
+    2. [ ] esbenp.prettier-vscode
+    3. [ ] bradlc.vscode-tailwindcss
+  a. All  n. None  i. Install selected  u. Uninstall selected
+  h. Help  m. Menu  q. Quit
+  Enter an option:
 ```
 
 Each row shows installed vs latest version (fetched live from the official
 release APIs, cached per session), whether settings are in sync, and the
-missing-extension count. Pick an editor, then an action — `config` syncs
-settings + extensions, `install`/`uninstall` manage the editor
-itself (downloads are written to a `syncode-*` temp file; Windows installs
-run `/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never
-launches on its own). `reset` and `uninstall` require typing the word to
-confirm. `q` quits; invalid input just re-prompts.
+missing-extension count. Pick an editor (by its full name — the editor's
+name is shown above the action menu), then an action from the numbered
+menu — `install`/`uninstall` manage the editor itself (downloads are written
+to a `syncode-*` temp file; Windows installs run
+`/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never launches
+on its own). `config` (only offered when the editor is installed) opens a
+submenu: `settings` copies the shared settings file (backing up to `.bak`),
+`extensions` opens the multiselect picker above — toggle extensions with
+their numbers, `a` selects all, `n` clears, then `i`/`u` install or uninstall
+the selection. `reset` and `uninstall` require typing the word to confirm;
+the Windows install action asks which installer variant to use.
+Every menu offers `Help`; `Menu` returns to the editor list, `Quit` (or `q`)
+exits; invalid input just re-prompts.
 
 ## What it does
 

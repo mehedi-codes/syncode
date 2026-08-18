@@ -149,6 +149,12 @@ declare -A FORK_DIR=(
 )
 FORK_ORDER=(code codium)
 
+# fork -> full display name (dashboard menus)
+declare -A FORK_FULL=(
+  [code]="Visual Studio Code"
+  [codium]="VSCodium"
+)
+
 settings_path() { printf '%s/%s/User/settings.json\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
 backup_path()   { printf '%s/%s/User/settings.json.bak\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
 
@@ -274,58 +280,66 @@ plan_fork() {
 }
 
 apply_fork() {
-  local fork="$1" sp bd cli
+  local fork="$1" scope="${2:-all}" sp bd cli
   sp="$(settings_path "$fork")"
   bd="$(backup_path "$fork")"
 
   mkdir -p "$(dirname -- "$sp")"
 
-  if [[ "$REVERT" == true ]]; then
-    if [[ -f "$bd" ]]; then
-      mv -- "$bd" "$sp"
-      echo "    $fork: restored settings.json from .bak"
-    elif [[ -f "$sp" ]]; then
-      rm -f -- "$sp"
-      echo "    $fork: deleted settings.json (factory defaults)"
+  if [[ "$scope" == all || "$scope" == settings ]]; then
+    if [[ "$REVERT" == true ]]; then
+      if [[ -f "$bd" ]]; then
+        mv -- "$bd" "$sp"
+        echo "    $fork: restored settings.json from .bak"
+      elif [[ -f "$sp" ]]; then
+        rm -f -- "$sp"
+        echo "    $fork: deleted settings.json (factory defaults)"
+      else
+        echo "    $fork: no settings.json to revert"
+      fi
     else
-      echo "    $fork: no settings.json to revert"
-    fi
-  else
-    if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
-      echo "    $fork: settings already in sync"
-    else
-      [[ -f "$sp" ]] && cp -- "$sp" "$bd"
-      cp -- "$CONFIG_DIR/settings.json" "$sp"
-      echo "    $fork: settings copied (backup -> .bak)"
+      if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
+        echo "    $fork: settings already in sync"
+      else
+        [[ -f "$sp" ]] && cp -- "$sp" "$bd"
+        cp -- "$CONFIG_DIR/settings.json" "$sp"
+        echo "    $fork: settings copied (backup -> .bak)"
+      fi
     fi
   fi
 
-  # extensions: install missing / uninstall syncode-installed
-  cli="$(command -v "$fork" 2>/dev/null || true)"
-  if [[ -n "$cli" ]]; then
-    local id missing
-    missing="$(missing_exts "$fork")"
+  if [[ "$scope" == all || "$scope" == extensions ]]; then
+    # extensions: install missing / uninstall syncode-installed
+    cli="$(command -v "$fork" 2>/dev/null || true)"
+    if [[ -n "$cli" ]]; then
+      local id missing
+      missing="$(missing_exts "$fork")"
 
-    if [[ "$REVERT" == true ]]; then
-      local want
-      want="$(ext_ids)"
-      for id in $want; do
-        if printf '%s\n' "$(installed_exts "$fork")" | grep -qx "$id"; then
-          "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
-          echo "    $fork: uninstalled $id"
-        fi
-      done
+      if [[ "$REVERT" == true ]]; then
+        local want
+        want="$(ext_ids)"
+        for id in $want; do
+          if printf '%s\n' "$(installed_exts "$fork")" | grep -qx "$id"; then
+            "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
+            echo "    $fork: uninstalled $id"
+          fi
+        done
+      else
+        for id in $missing; do
+          if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
+            echo "    $fork: installed $id"
+          else
+            log_warn "$fork: FAILED to install $id"
+          fi
+        done
+      fi
     else
-      for id in $missing; do
-        if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
-          echo "    $fork: installed $id"
-        else
-          log_warn "$fork: FAILED to install $id"
-        fi
-      done
+      if [[ "$scope" == all ]]; then
+        echo "    $fork: no CLI found - settings handled, extensions skipped"
+      else
+        echo "    $fork: no CLI found - extensions skipped"
+      fi
     fi
-  else
-    echo "    $fork: no CLI found - settings handled, extensions skipped"
   fi
 }
 
@@ -547,41 +561,177 @@ uninstall_editor() {
   echo "  $fork removed"
 }
 
-# run_dashboard - interactive hub: pick editor, pick action, loop. q quits.
+# show_action_help - shared help text offered by the Help option in every menu.
+show_action_help() {
+  echo "  install    install latest stable if not installed"
+  echo "  settings   copy settings.json (backup .bak) to the editor"
+  echo "  extensions pick which extensions to install/uninstall"
+  echo '  reset      restore factory defaults  (type "reset" to confirm)'
+  echo '  uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
+}
+
+# pick_extensions <fork> - multiselect extension manager: toggle with numbers,
+# a=all, n=none, i=install selected, u=uninstall selected, h=help, m=back to
+# the config menu, q=quit. Only toggle state lives here; i/u run the CLI.
+pick_extensions() {
+  local fork="$1" ids=() id n line
+  declare -A sel
+  mapfile -t ids < <(ext_ids)
+  if [[ ${#ids[@]} -eq 0 ]]; then
+    echo "  no extensions in extensions.json"
+    return
+  fi
+  while true; do
+    echo "  ${FORK_FULL[$fork]} extensions"
+    for id in "${!ids[@]}"; do
+      local mark=" "
+      [[ -n "${sel[${ids[$id]}]:-}" ]] && mark="x"
+      printf '    %d. [%s] %s\n' "$((id + 1))" "$mark" "${ids[$id]}"
+    done
+    echo "  a. All  n. None  i. Install selected  u. Uninstall selected"
+    echo "  h. Help  m. Menu  q. Quit"
+    read -r -p "  Enter an option: " line || line="q"
+    line="${line%$'\r'}"
+    if [[ "$line" =~ ^[0-9]+$ ]]; then
+      n=$((10#$line - 1))
+      if (( n >= 0 && n < ${#ids[@]} )); then
+        id="${ids[$n]}"
+        if [[ -n "${sel[$id]:-}" ]]; then unset "sel[$id]"; else sel[$id]="1"; fi
+      else
+        echo "invalid: $line"
+      fi
+      continue
+    fi
+    case "$line" in
+      a|A)
+        for id in "${ids[@]}"; do sel[$id]="1"; done
+        ;;
+      n|N)
+        sel=()
+        ;;
+      i|I)
+        local cli picked=()
+        cli="$(command -v "$fork" 2>/dev/null || true)"
+        if [[ -z "$cli" ]]; then echo "  $fork not on PATH - cannot install"; continue; fi
+        for id in "${ids[@]}"; do [[ -n "${sel[$id]:-}" ]] && picked+=("$id"); done
+        if [[ ${#picked[@]} -eq 0 ]]; then echo "  nothing selected"; continue; fi
+        for id in "${picked[@]}"; do
+          if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
+            echo "    installed $id"
+          else
+            log_warn "$fork: FAILED to install $id"
+          fi
+        done
+        sel=()
+        ;;
+      u|U)
+        local cli picked=()
+        cli="$(command -v "$fork" 2>/dev/null || true)"
+        if [[ -z "$cli" ]]; then echo "  $fork not on PATH - cannot uninstall"; continue; fi
+        for id in "${ids[@]}"; do [[ -n "${sel[$id]:-}" ]] && picked+=("$id"); done
+        if [[ ${#picked[@]} -eq 0 ]]; then echo "  nothing selected"; continue; fi
+        for id in "${picked[@]}"; do
+          "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
+          echo "    uninstalled $id"
+        done
+        sel=()
+        ;;
+      h|H)
+        show_action_help
+        ;;
+      m|M)
+        return
+        ;;
+      q|Q)
+        echo "bye."; exit 0
+        ;;
+      *) echo "invalid: $line" ;;
+    esac
+  done
+}
+
+# run_dashboard - interactive hub: pick editor, pick action, loop. Numbered
+# menus; every menu offers Help + Quit, non-first menus add Menu (back to the
+# editor picker). The editor's full name is shown above the action menu.
 run_dashboard() {
   local line editor action
   while true; do
     echo ""
     render_dashboard
     echo ""
-    read -r -p "pick editor (1=code 2=codium, q=quit): " line || line="q"
-    line="${line%$'\r'}"
-    case "$line" in
-      q|Q) echo "bye."; exit 0 ;;
-      code|codium) editor="$line" ;;
-      1) editor="code" ;;
-      2) editor="codium" ;;
-      *) echo "invalid: $line"; continue ;;
-    esac
+    editor=""
     while true; do
-      read -r -p "action for $editor (install/config/reset/uninstall/help, q=quit): " action \
-        || action="q"
+      echo "  Pick an option:"
+      echo "    1. Visual Studio Code"
+      echo "    2. VSCodium"
+      echo "    3. Help"
+      echo "    4. Quit"
+      read -r -p "  Enter an option: " line || line="q"
+      line="${line%$'\r'}"
+      case "$line" in
+        q|Q|4) echo "bye."; exit 0 ;;
+        code|1) editor="code"; break ;;
+        codium|2) editor="codium"; break ;;
+        3) show_action_help ;;
+        *) echo "invalid: $line" ;;
+      esac
+    done
+    while true; do
+      local opts=()
+      opts+=(Install)
+      if [[ -n "$(get_installed_version "$editor")" ]]; then opts+=(Config); fi
+      opts+=(Reset Uninstall Help Menu Quit)
+      echo "  ${FORK_FULL[$editor]}"
+      echo "  Pick an option:"
+      local i
+      for i in "${!opts[@]}"; do
+        echo "    $((i+1)). ${opts[$i]}"
+      done
+      read -r -p "  Enter an option: " action || action="q"
       action="${action%$'\r'}"
-      case "$action" in
-        q|Q) echo "bye."; exit 0 ;;
-        install|config|reset|uninstall|help) break ;;
+      local sel=""
+      if [[ "$action" =~ ^[0-9]+$ ]]; then
+        local n=$((10#$action - 1))
+        if (( n >= 0 && n < ${#opts[@]} )); then
+          sel="${opts[$n]}"
+        else
+          sel="invalid"
+        fi
+      else
+        sel="$action"
+      fi
+      case "${sel,,}" in
+        install) action="install"; break ;;
+        config) action="config"; break ;;
+        reset) action="reset"; break ;;
+        uninstall) action="uninstall"; break ;;
+        help) show_action_help ;;
+        menu) continue 2 ;;
+        quit|q) echo "bye."; exit 0 ;;
         *) echo "invalid: $action" ;;
       esac
     done
     case "$action" in
-      help)
-        echo "  install    install latest stable if not installed"
-        echo "  config     copy settings (backup .bak) + install missing extensions"
-        echo "  reset      restore factory defaults  (type \"reset\" to confirm)"
-        echo "  uninstall  remove editor and its config dir  (type \"uninstall\" to confirm)"
-        ;;
       config)
-        apply_fork "$editor" || true
+        while true; do
+          echo "  ${FORK_FULL[$editor]}"
+          echo "  Pick an option:"
+          echo "    1. Settings"
+          echo "    2. Extensions"
+          echo "    3. Help"
+          echo "    4. Menu"
+          echo "    5. Quit"
+          read -r -p "  Enter an option: " line || line="q"
+          line="${line%$'\r'}"
+          case "$line" in
+            1) apply_fork "$editor" settings || true ;;
+            2) pick_extensions "$editor" ;;
+            3) show_action_help ;;
+            4) continue 2 ;;
+            5|q|Q) echo "bye."; exit 0 ;;
+            *) echo "invalid: $line" ;;
+          esac
+        done
         ;;
       reset)
         read -r -p 'Type "reset" to confirm: ' line || line=""
