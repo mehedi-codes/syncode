@@ -2,7 +2,7 @@
 #  install.ps1 - syncode one-time runner (Windows / PowerShell)
 #  Fetches the latest syncode.ps1 + config via Invoke-WebRequest
 #  (no git, no cache) and runs it immediately from a temp dir.
-#  Version: 1.0.0
+#  Version: 1.2.0
 # ============================================================
 param(
     [Alias('h')][switch]$Help,

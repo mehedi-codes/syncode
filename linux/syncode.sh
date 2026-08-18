@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-#  syncode - sync your editor setup to every VS Code-family editor
-#  Version: 1.1.0
+#  syncode - Sync and manage your VS Code and VSCodium editors
+#  Version: 1.2.0
 # ============================================================
 set -Eeuo pipefail
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 TOOL_NAME="syncode"
-DESCRIPTION="sync your editor setup to every VS Code-family editor"
+DESCRIPTION="Sync and manage your VS Code and VSCodium editors"
 
 BANNER="$(cat <<'BANNER_EOF'
 :'######:'##:::'##'##::: ##:'######::'#######:'########:'########:

@@ -3,7 +3,7 @@
 #  syncode - one-time runner
 #  Fetches the latest syncode.sh + config via curl (no git,
 #  no cache) and runs it immediately from a temp directory.
-#  Version: 1.0.0
+#  Version: 1.2.0
 # ============================================================
 set -Eeuo pipefail
 

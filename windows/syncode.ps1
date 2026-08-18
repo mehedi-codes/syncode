@@ -1,7 +1,7 @@
 # ============================================================
-#  syncode.ps1 - sync your editor setup to every VS Code-family
-#  editor. Windows / PowerShell version (Windows only).
-#  Version: 1.1.0
+#  syncode.ps1 - Sync and manage your VS Code and VSCodium editors.
+#  Windows / PowerShell version (Windows only).
+#  Version: 1.2.0
 # ============================================================
 param(
     [Alias('h')][switch]$Help,
@@ -18,9 +18,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$VERSION_STR = "1.1.0"
+$VERSION_STR = "1.2.0"
 $TOOL_NAME = "syncode"
-$DESCRIPTION = "sync your editor setup to every VS Code-family editor"
+$DESCRIPTION = "Sync and manage your VS Code and VSCodium editors"
 
 $BANNER = @'
 :'######:'##:::'##'##::: ##:'######:'#######:'########:'########:
