@@ -1,12 +1,12 @@
 # CI checks for the Windows port. Run under BOTH PowerShell 5.1 and 7:
-#   pwsh -NoProfile -File .github/scripts/ci-windows.ps1
-#   powershell.exe -NoProfile -File .github/scripts/ci-windows.ps1
+#   pwsh -NoProfile -File .github/ci/windows.ps1
+#   powershell.exe -NoProfile -File .github/ci/windows.ps1
 #
 # Runs syncode.ps1 as a CHILD process (it calls exit on many paths) using the
 # engine this script runs under, so each invocation tests the matching engine.
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot | Split-Path -Parent  # .github/scripts -> repo root
+$root = Split-Path -Parent $PSScriptRoot | Split-Path -Parent  # .github/ci -> repo root
 Set-Location $root
 
 Write-Host "== ps parse + ASCII check =="

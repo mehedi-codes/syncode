@@ -33,9 +33,9 @@ sandboxed dry-runs + syntax/parse checks — see the layout table.
 | `shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
 | `shared/releases.json` | Per-fork release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers `-i/-u/-rm/-l` and the dashboard's latest column. |
 | `shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
-| `.github/workflows/ci.yml` | GitHub Actions entrypoint: Linux checks (`bash .github/scripts/ci-linux.sh`) + Windows checks (`.github/scripts/ci-windows.ps1` under pwsh 7 and 5.1). |
-| `.github/scripts/ci-linux.sh` | Linux CI: bash syntax, release self-check, sandbox dry-runs (checkout + flattened layouts), extensions.md coverage, version lockstep. |
-| `.github/scripts/ci-windows.ps1` | Windows CI: ps1 parse (7 + 5.1) + ASCII check, sandbox dry-runs (checkout + flattened layouts). |
+| `.github/workflows/ci.yml` | GitHub Actions entrypoint: Linux checks (`bash .github/ci/linux.sh`) + Windows checks (`.github/ci/windows.ps1` under pwsh 7 and 5.1). |
+| `.github/ci/linux.sh` | Linux CI: bash syntax, release self-check, sandbox dry-runs (checkout + flattened layouts), extensions.md coverage, version lockstep. |
+| `.github/ci/windows.ps1` | Windows CI: ps1 parse (7 + 5.1) + ASCII check, sandbox dry-runs (checkout + flattened layouts). |
 | `README.md` | User-facing docs. Keep in sync if CLI behavior changes. |
 
 Platform dirs (`linux/`, `windows/`) hold the scripts; `shared/` holds the

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # CI checks for the Linux port. Run from the repo root:
-#   bash .github/scripts/ci-linux.sh
+#   bash .github/ci/linux.sh
 set -euo pipefail
 
-# Repo root (this script lives in .github/scripts/)
+# Repo root (this script lives in .github/ci/)
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 echo "== bash syntax =="
