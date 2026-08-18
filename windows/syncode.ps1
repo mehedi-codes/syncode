@@ -1,7 +1,7 @@
 # ============================================================
 #  syncode.ps1 - Sync and manage your VS Code and VSCodium editors.
 #  Windows / PowerShell version (Windows only).
-#  Version: 1.3.0
+#  Version: 1.4.0
 # ============================================================
 param(
     [Alias('h')][switch]$Help,
@@ -17,19 +17,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$VERSION_STR = "1.3.0"
+$VERSION_STR = "1.4.0"
 $TOOL_NAME = "syncode"
 $DESCRIPTION = "Sync and manage your VS Code and VSCodium editors"
 
 $BANNER = @'
-:'######:'##:::'##'##::: ##:'######:'#######:'########:'########:
-'##... ##. ##:'##::###:: ##'##... ##'##.... ##:##.... ##:##.....::
- ##:::..::. ####:::####: ##:##:::..::##:::: ##:##:::: ##:##:::::::
-. ######:::. ##::::## ## ##:##:::::::##:::: ##:##:::: ##:######:::
-:..... ##::: ##::::##. ####:##:::::::##:::: ##:##:::: ##:##...::::
-'##::: ##::: ##::::##:. ###:##::: ##:##:::: ##:##:::: ##:##:::::::
-. ######:::: ##::::##::. ##. ######:. #######::########::########:
-:......:::::..::::..::::..::......:::.......::........::........::
+:'######::'##:::'##:'##::: ##::'######:::'#######::'########::'########:
+'##... ##:. ##:'##:: ###:: ##:'##... ##:'##.... ##: ##.... ##: ##.....::
+ ##:::..:::. ####::: ####: ##: ##:::..:: ##:::: ##: ##:::: ##: ##:::::::
+. ######::::. ##:::: ## ## ##: ##::::::: ##:::: ##: ##:::: ##: ######:::
+:..... ##:::: ##:::: ##. ####: ##::::::: ##:::: ##: ##:::: ##: ##...::::
+'##::: ##:::: ##:::: ##:. ###: ##::: ##: ##:::: ##: ##:::: ##: ##:::::::
+. ######::::: ##:::: ##::. ##:. ######::. #######:: ########:: ########:
+:......::::::..:::::..::::..:::......::::.......:::........:::........::
 '@
 
 # Script directory (install.ps1 runs this from a temp dir with the configs beside it)
@@ -248,13 +248,20 @@ function Get-ExtIds {
     @([regex]::Matches($text, '"[a-z0-9-]+\.[a-z0-9-]+"')) | ForEach-Object { $_.Value.Trim('"') }
 }
 
+$script:ExtCache = @{}
+
 function Get-InstalledExts($fork) {
+    if ($script:ExtCache.ContainsKey($fork)) { return $script:ExtCache[$fork] }
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-    if (-not $cli) { return @() }
+    if (-not $cli) { $script:ExtCache[$fork] = @(); return @() }
     # $null | closes stdin on the native CLI so it can't eat interactive input;
     # .Trim() strips the trailing CR from Windows CRLF output
-    @($null | & $cli.Source --list-extensions 2>$null | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $exts = @($null | & $cli.Source --list-extensions 2>$null | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $script:ExtCache[$fork] = $exts
+    return $exts
 }
+
+function Reset-ExtCache($fork) { $script:ExtCache.Remove($fork) | Out-Null }
 
 function Get-EditorVersion($fork) {
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
@@ -322,20 +329,20 @@ function Apply-Fork($fork, $Scope = "all") {
         if ($Revert) {
             if (Test-Path $bd) {
                 Move-Item -Force $bd $sp
-                Write-Output "    ${fork}: restored settings.json from .bak"
+                Write-Output "${fork}: restored settings.json from .bak"
             } elseif (Test-Path $sp) {
                 Remove-Item -Force $sp
-                Write-Output "    ${fork}: deleted settings.json (factory defaults)"
+                Write-Output "${fork}: deleted settings.json (factory defaults)"
             } else {
-                Write-Output "    ${fork}: no settings.json to revert"
+                Write-Output "${fork}: no settings.json to revert"
             }
         } else {
             if ((Test-Path $sp) -and (Test-SameSettings $sp $settingsSrc)) {
-                Write-Output "    ${fork}: settings already in sync"
+                Write-Output "${fork}: settings already in sync"
             } else {
                 if (Test-Path $sp) { Copy-Item -Force $sp $bd }
                 Copy-Item -Force $settingsSrc $sp
-                Write-Output "    ${fork}: settings copied (backup -> .bak)"
+                Write-Output "${fork}: settings copied (backup -> .bak)"
             }
         }
     }
@@ -348,21 +355,22 @@ function Apply-Fork($fork, $Scope = "all") {
                 foreach ($id in @(Get-ExtIds)) {
                     if (@(Get-InstalledExts $fork) -contains $id) {
                         $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
-                        Write-Output "    ${fork}: uninstalled $id"
+                        Write-Output "${fork}: uninstalled $id"
                     }
                 }
             } else {
                 foreach ($id in @(Get-MissingExts $fork)) {
                     $null | & $cli.Source --install-extension $id --force 2>$null | Out-Null
-                    if ($LASTEXITCODE -eq 0) { Write-Output "    ${fork}: installed $id" }
+                    if ($LASTEXITCODE -eq 0) { Write-Output "${fork}: installed $id" }
                     else                     { Write-LogWarn "${fork}: FAILED to install $id" }
                 }
             }
         } else {
-            if ($Scope -eq "all") { Write-Output "    ${fork}: no CLI found - settings handled, extensions skipped" }
-            else                  { Write-Output "    ${fork}: no CLI found - extensions skipped" }
+            if ($Scope -eq "all") { Write-Output "${fork}: no CLI found - settings handled, extensions skipped" }
+            else                  { Write-Output "${fork}: no CLI found - extensions skipped" }
         }
     }
+    Reset-ExtCache $fork
 }
 
 # ------------------------------------------------------------
@@ -410,7 +418,12 @@ function Show-ListVersions {
 
 # Show-Dashboard - one row per fork: name / installed / latest / settings / extensions
 function Show-Dashboard {
-    "{0,-8} {1,-12} {2,-12} {3,-9} {4}" -f "name", "installed", "latest", "settings", "extensions"
+    # Boxed grid: column width = longest cell (header or value) + 2 padding so
+    # nothing ever overflows; ASCII-only box (5.1 can't render box-drawing
+    # glyphs, and output stays byte-identical with the bash port). The header
+    # row is bold when the console supports VT.
+    $hdr = @("Name", "Installed", "Latest", "Settings", "Extensions")
+    $rows = @()
     foreach ($f in $FORK_ORDER) {
         $inst = Get-InstalledVersion $f
         if (-not $inst) { $inst = "-" }
@@ -432,8 +445,54 @@ function Show-Dashboard {
         } else {
             $ext = "n/a"
         }
-        "{0,-8} {1,-12} {2,-12} {3,-9} {4}" -f $f, $inst, $latest, $settings, $ext
+        $rows += ,@($f, $inst, $latest, $settings, $ext)
     }
+    $w = @()
+    for ($i = 0; $i -lt 5; $i++) {
+        $len = $hdr[$i].Length
+        foreach ($r in $rows) { if ($r[$i].Length -gt $len) { $len = $r[$i].Length } }
+        $w += ($len + 2)
+    }
+    $b = ""; $R = ""
+    if ($script:CanAnsi) { $e = [char]27; $b = "$e[1m"; $R = "$e[0m" }
+    $line = "+"
+    foreach ($wi in $w) { $line += ("-" * $wi) + "+" }
+    Write-Output $line
+    $out = "|"
+    for ($i = 0; $i -lt 5; $i++) {
+        $out += (" {0}{1,-$($w[$i] - 2)}{2} |" -f $b, $hdr[$i], $R)
+    }
+    Write-Output $out
+    Write-Output $line
+    foreach ($r in $rows) {
+        $out = "|"
+        for ($i = 0; $i -lt 5; $i++) {
+            $out += (" {0,-$($w[$i] - 2)} |" -f $r[$i])
+        }
+        Write-Output $out
+    }
+    Write-Output $line
+}
+
+# Show-Banner - ASCII art + version + description header.
+function Show-Banner {
+    Write-Output ""
+    Write-Output $BANNER
+    Write-Output ""
+    Write-Output "$TOOL_NAME v$VERSION_STR - $DESCRIPTION"
+}
+
+# Show-Frame <notice> - repaint the whole dashboard: clear (interactive only),
+# banner, status table, optional notice line. Called at the top of every menu
+# loop so each pick swaps the view instead of stacking. No clear when output is
+# redirected (CI, pipes) so the transcript stays readable.
+function Show-Frame($notice) {
+    if (-not [Console]::IsOutputRedirected) { try { [Console]::Clear() } catch {} }
+    Show-Banner
+    Write-Output ""
+    Show-Dashboard
+    if ($notice) { Write-Output $notice }
+    Write-Output ""
 }
 
 # Install-Editor <fork> [<variant>] - download (syncode temp name) + silent
@@ -458,7 +517,10 @@ function Install-Editor($fork, $variant = "win") {
     Wait-ProcessSpinner "  ${fork}: installing $ver" $p
     Remove-Item -Force $tmp
     if ($p.ExitCode -ne 0) { throw "${fork}: installer failed (exit $($p.ExitCode))" }
-    Write-Output "  $fork installed"
+    Write-Output "$fork installed"
+    Reset-InstalledCache $fork
+    Reset-ExtCache $fork
+    Reset-LatestCache $fork
 }
 
 # Uninstall-Editor <fork> - unins000.exe /VERYSILENT, winget fallback, config dir.
@@ -483,21 +545,24 @@ function Uninstall-Editor($fork) {
         if ($p.ExitCode -ne 0) { Write-LogWarn "${fork}: uninstaller exit $($p.ExitCode)" }
     } else {
         $id = Get-ReleaseWinget $fork
-        Write-Output "  ${fork}: unins000.exe not found - winget fallback: $id"
+        Write-Output "${fork}: unins000.exe not found - winget fallback: $id"
         winget uninstall --id $id --silent --accept-source-agreements | Out-Null
     }
     Remove-Item -Recurse -Force (Join-Path $DATA_ROOT $FORK_DIR[$fork]) -ErrorAction SilentlyContinue
-    Write-Output "  $fork removed"
+    Write-Output "$fork removed"
+    Reset-InstalledCache $fork
+    Reset-ExtCache $fork
+    Reset-LatestCache $fork
 }
 
 # Select-InstallVariant <fork> - dashboard sub-prompt for installer variant.
 # Returns a releases.json installer key; Enter/empty = "win" (user, current default).
 function Select-InstallVariant($fork) {
     if ($fork -eq "code") {
-        Write-Output "  installer variant:"
-        Write-Output "    1. User Installer"
-        Write-Output "    2. System Installer"
-        $line = Read-Line "  pick (default 1=User): "
+        Write-Output "installer variant:"
+        Write-Output "1. User Installer"
+        Write-Output "2. System Installer"
+        $line = Read-Line "pick (default 1=User): "
         if ($null -ne $line) { $line = $line.Trim() }
         switch ($line) {
             "2" { return "winSystem" }
@@ -505,11 +570,11 @@ function Select-InstallVariant($fork) {
             default { return "win" }
         }
     }
-    Write-Output "  installer variant:"
-    Write-Output "    1. User Installer"
-    Write-Output "    2. System Installer"
-    Write-Output "    3. MSI (updates enabled)"
-    $line = Read-Line "  pick (default 1=User): "
+    Write-Output "installer variant:"
+    Write-Output "1. User Installer"
+    Write-Output "2. System Installer"
+    Write-Output "3. MSI (updates enabled)"
+    $line = Read-Line "pick (default 1=User): "
     if ($null -ne $line) { $line = $line.Trim() }
     switch ($line) {
         "2" { return "winSystem" }
@@ -521,29 +586,34 @@ function Select-InstallVariant($fork) {
 
 # Show-ActionHelp - shared help text offered by the Help option in every menu.
 function Show-ActionHelp {
-    Write-Output "  install    install latest stable if not installed"
-    Write-Output "  settings   copy settings.json (backup .bak) to the editor"
-    Write-Output "  extensions pick which extensions to install/uninstall"
-    Write-Output '  reset      restore factory defaults  (type "reset" to confirm)'
-    Write-Output '  uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
+    Write-Output "install    install latest stable if not installed"
+    Write-Output "settings   copy settings.json (backup .bak) to the editor"
+    Write-Output "extensions pick which extensions to install/uninstall"
+    Write-Output 'reset      restore factory defaults  (type "reset" to confirm)'
+    Write-Output 'uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
 }
 
 # Pick-Extensions <fork> - multiselect extension manager: toggle with numbers,
 # a=all, n=none, i=install selected, u=uninstall selected, h=help, m=back to
 # the config menu, q=quit. Only toggle state lives here; i/u run the CLI.
+# Feedback goes to $script:Notice so the repainted frame keeps showing it.
 function Pick-Extensions($fork) {
     $ids = @(Get-ExtIds)
-    if ($ids.Count -eq 0) { Write-Output "  no extensions in extensions.json"; return }
+    if ($ids.Count -eq 0) { $script:Notice = "no extensions in extensions.json"; return }
     $sel = @{}
     :extpick while ($true) {
-        Write-Output "  $($FORK_FULL[$fork]) extensions"
+        Show-Frame $script:Notice
+        Write-Output "$($FORK_FULL[$fork]) extensions"
+        Write-Output "Pick an option:"
+        Write-Output ""
         for ($i = 0; $i -lt $ids.Count; $i++) {
             $mark = if ($sel[$ids[$i]]) { "x" } else { " " }
-            Write-Output ("    {0}. [{1}] {2}" -f ($i + 1), $mark, $ids[$i])
+            Write-Output ("{0}. [{1}] {2}" -f ($i + 1), $mark, $ids[$i])
         }
-        Write-Output "  a. All  n. None  i. Install selected  u. Uninstall selected"
-        Write-Output "  h. Help  m. Menu  q. Quit"
-        $line = Read-Line "  Enter an option: "
+        Write-Output "a. All  n. None  i. Install selected  u. Uninstall selected"
+        Write-Output "h. Help  m. Menu  q. Quit"
+        Write-Output ""
+        $line = Read-Line "Enter an option: "
         if ($null -eq $line) { Write-Output "bye."; exit 0 }
         $line = $line.Trim()
         if ($line -match '^\d+$') {
@@ -551,43 +621,52 @@ function Pick-Extensions($fork) {
             if ($n -ge 0 -and $n -lt $ids.Count) {
                 $id = $ids[$n]
                 $sel[$id] = -not $sel[$id]
-            } else { Write-Output "invalid: $line" }
+                $script:Notice = ""
+            } else { $script:Notice = "invalid: $line" }
             continue extpick
         }
         switch ($line.ToLower()) {
             "a" {
                 foreach ($id in $ids) { $sel[$id] = $true }
+                $script:Notice = "all selected"
             }
             "n" {
                 foreach ($id in $ids) { $sel[$id] = $false }
+                $script:Notice = "none selected"
             }
             "i" {
                 $picked = @($ids | Where-Object { $sel[$_] })
-                if ($picked.Count -eq 0) { Write-Output "  nothing selected"; continue extpick }
+                if ($picked.Count -eq 0) { $script:Notice = "nothing selected"; continue extpick }
                 $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-                if (-not $cli) { Write-Output "  $fork not on PATH - cannot install"; continue extpick }
+                if (-not $cli) { $script:Notice = "$fork not on PATH - cannot install"; continue extpick }
+                $out = @()
                 foreach ($id in $picked) {
                     $null | & $cli.Source --install-extension $id --force 2>$null | Out-Null
-                    if ($LASTEXITCODE -eq 0) { Write-Output "    installed $id" }
+                    if ($LASTEXITCODE -eq 0) { $out += "installed $id" }
                     else                     { Write-LogWarn "${fork}: FAILED to install $id" }
                 }
                 $sel.Clear()
+                $script:Notice = $out -join "`n"
+                Reset-ExtCache $fork
             }
             "u" {
                 $picked = @($ids | Where-Object { $sel[$_] })
-                if ($picked.Count -eq 0) { Write-Output "  nothing selected"; continue extpick }
+                if ($picked.Count -eq 0) { $script:Notice = "nothing selected"; continue extpick }
                 $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-                if (-not $cli) { Write-Output "  $fork not on PATH - cannot uninstall"; continue extpick }
+                if (-not $cli) { $script:Notice = "$fork not on PATH - cannot uninstall"; continue extpick }
+                $out = @()
                 foreach ($id in $picked) {
                     $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
-                    Write-Output "    uninstalled $id"
+                    $out += "uninstalled $id"
                 }
                 $sel.Clear()
+                $script:Notice = $out -join "`n"
+                Reset-ExtCache $fork
             }
-            "h" { Show-ActionHelp; continue extpick }
+            "h" { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue extpick }
             "m" { return }
             "q" { Write-Output "bye."; exit 0 }
-            default { Write-Output "invalid: $line" }
+            default { $script:Notice = "invalid: $line" }
         }
     }
 }
@@ -595,31 +674,33 @@ function Pick-Extensions($fork) {
 # Run-Dashboard - interactive hub: pick editor, pick action, loop. Numbered
 # menus; every menu offers Help + Quit, non-first menus add Menu (back to the
 # editor picker). The editor's full name is shown above the action menu.
+# Each loop iteration repaints the full frame (banner + table + notice + menu).
 function Run-Dashboard {
+    $script:Notice = ""
     :main while ($true) {
-        Write-Output ""
-        Show-Dashboard
-        Write-Output ""
         $editor = ""
         :editorpick while ($true) {
-            Write-Output "  Pick an option:"
-            Write-Output "    1. Visual Studio Code"
-            Write-Output "    2. VSCodium"
-            Write-Output "    3. Help"
-            Write-Output "    4. Quit"
-            $line = Read-Line "  Enter an option: "
+            Show-Frame $script:Notice
+            Write-Output "Pick an option:"
+            Write-Output ""
+            Write-Output "1. Visual Studio Code"
+            Write-Output "2. VSCodium"
+            Write-Output "3. Help"
+            Write-Output "4. Quit"
+            Write-Output ""
+            $line = Read-Line "Enter an option: "
             if ($null -eq $line) { Write-Output "bye."; exit 0 }
             $line = $line.Trim()
             switch ($line) {
                 "1"      { $editor = "code"; break editorpick }
                 "2"      { $editor = "codium"; break editorpick }
-                "3"      { Show-ActionHelp; continue editorpick }
+                "3"      { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue editorpick }
                 "4"      { Write-Output "bye."; exit 0 }
                 "q"      { Write-Output "bye."; exit 0 }
                 "Q"      { Write-Output "bye."; exit 0 }
                 "code"   { $editor = "code"; break editorpick }
                 "codium" { $editor = "codium"; break editorpick }
-                default  { Write-Output "invalid: $line" }
+                default  { $script:Notice = "invalid: $line"; continue editorpick }
             }
         }
         $action = ""
@@ -629,12 +710,14 @@ function Run-Dashboard {
             $opts += ,@("Install", "install")
             if (Get-InstalledVersion $editor) { $opts += ,@("Config", "config") }
             $opts += @("Reset", "reset"), @("Uninstall", "uninstall"), @("Help", "help"), @("Menu", "menu"), @("Quit", "quit")
-            Write-Output "  $($FORK_FULL[$editor])"
-            Write-Output "  Pick an option:"
+            Show-Frame $script:Notice
+            Write-Output "Pick an option for $($FORK_FULL[$editor]):"
+            Write-Output ""
             for ($i = 0; $i -lt $opts.Count; $i++) {
-                Write-Output ("    {0}. {1}" -f ($i + 1), $opts[$i][0])
+                Write-Output ("{0}. {1}" -f ($i + 1), $opts[$i][0])
             }
-            $line = Read-Line "  Enter an option: "
+            Write-Output ""
+            $line = Read-Line "Enter an option: "
             if ($null -eq $line) { Write-Output "bye."; exit 0 }
             $line = $line.Trim()
             $sel = ""
@@ -649,39 +732,41 @@ function Run-Dashboard {
                 "config"    { $action = "config"; break actionpick }
                 "reset"     { $action = "reset"; break actionpick }
                 "uninstall" { $action = "uninstall"; break actionpick }
-                "help"      { Show-ActionHelp; continue actionpick }
+                "help"      { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue actionpick }
                 "menu"      { continue main }
                 "quit"      { Write-Output "bye."; exit 0 }
                 "q"         { Write-Output "bye."; exit 0 }
-                default     { Write-Output "invalid: $line" }
+                default     { $script:Notice = "invalid: $line"; continue actionpick }
             }
         }
         switch ($action) {
             "config" {
                 :configpick while ($true) {
-                    Write-Output "  $($FORK_FULL[$editor])"
-                    Write-Output "  Pick an option:"
-                    Write-Output "    1. Settings"
-                    Write-Output "    2. Extensions"
-                    Write-Output "    3. Help"
-                    Write-Output "    4. Menu"
-                    Write-Output "    5. Quit"
-                    $line = Read-Line "  Enter an option: "
+                    Show-Frame $script:Notice
+                    Write-Output "Pick an option for $($FORK_FULL[$editor]):"
+                    Write-Output ""
+                    Write-Output "1. Settings"
+                    Write-Output "2. Extensions"
+                    Write-Output "3. Help"
+                    Write-Output "4. Menu"
+                    Write-Output "5. Quit"
+                    Write-Output ""
+                    $line = Read-Line "Enter an option: "
                     if ($null -eq $line) { Write-Output "bye."; exit 0 }
                     $line = $line.Trim()
                     switch ($line) {
                         "1" {
                             try { Apply-Fork $editor "settings" }
-                            catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
+                            catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
                             continue configpick
                         }
                         "2" { Pick-Extensions $editor; continue configpick }
-                        "3" { Show-ActionHelp; continue configpick }
+                        "3" { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue configpick }
                         "4" { continue main }
                         "5" { Write-Output "bye."; exit 0 }
                         "q" { Write-Output "bye."; exit 0 }
                         "Q" { Write-Output "bye."; exit 0 }
-                        default { Write-Output "invalid: $line" }
+                        default { $script:Notice = "invalid: $line"; continue configpick }
                     }
                 }
             }
@@ -690,31 +775,30 @@ function Run-Dashboard {
                 if ($null -ne $line -and $line.Trim() -eq "reset") {
                     try {
                         $Revert = $true; Apply-Fork $editor; $Revert = $false
+                        $script:Notice = "$editor reset to factory defaults"
                     } catch {
                         $Revert = $false
-                        Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
+                        $script:Notice = "[ERROR] $($_.Exception.Message)"
                     }
                 } else {
-                    Write-Output "  not confirmed - skipped"
+                    $script:Notice = "not confirmed - skipped"
                 }
             }
             "uninstall" {
                 $line = Read-Line 'Type "uninstall" to confirm: '
                 if ($null -ne $line -and $line.Trim() -eq "uninstall") {
-                    try { Uninstall-Editor $editor }
-                    catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
-                    Reset-LatestCache $editor
+                    try { Uninstall-Editor $editor; $script:Notice = "$editor uninstalled" }
+                    catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
                 } else {
-                    Write-Output "  not confirmed - skipped"
+                    $script:Notice = "not confirmed - skipped"
                 }
             }
             "install" {
                 if (Get-InstalledVersion $editor) {
-                    Write-Output "  $editor already installed"
+                    $script:Notice = "$editor already installed"
                 } else {
-                    try { Install-Editor $editor (Select-InstallVariant $editor) }
-                    catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
-                    Reset-LatestCache $editor
+                    try { Install-Editor $editor (Select-InstallVariant $editor); $script:Notice = "$editor installed" }
+                    catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
                 }
             }
         }
@@ -734,10 +818,8 @@ function Resolve-ActionForks($arg) {
 # ------------------------------------------------------------
 #  Main
 # ------------------------------------------------------------
-Write-Output ""
-Write-Output $BANNER
-Write-Output ""
-Write-Output "$TOOL_NAME v$VERSION_STR - $DESCRIPTION"
+# Note: no banner here - the dashboard self-renders via Show-Frame;
+# non-dashboard paths below print Show-Banner themselves.
 
 # action flags take priority (list-versions / install / uninstall)
 $action = ""
@@ -754,6 +836,7 @@ if ($ListVersions) {
 }
 
 if ($action) {
+    Show-Banner
     if ($action -eq "list-versions") {
         Show-ListVersions
         exit 0
@@ -784,7 +867,7 @@ if ($action) {
             Write-Output "${f}:"
             switch ($action) {
                 "install" {
-                    if (Get-InstalledVersion $f) { Write-Output "  $f already installed" }
+                    if (Get-InstalledVersion $f) { Write-Output "$f already installed" }
                     else { Install-Editor $f }
                 }
                 "uninstall" { Uninstall-Editor $f }
@@ -809,8 +892,9 @@ foreach ($fork in $FORK_ORDER) {
     if (Test-Fork $fork) { $detected += $fork }
 }
 
+Show-Banner
 Write-Output "Plan:"
-if ($Revert) { Write-Output "  mode: revert to factory defaults" }
+if ($Revert) { Write-Output "mode: revert to factory defaults" }
 "{0,-10} {1,-12} {2}" -f "name", "version", "status"
 "{0,-10} {1,-12} {2}" -f "----", "-------", "------"
 foreach ($f in $FORK_ORDER) {
@@ -833,9 +917,9 @@ if (-not $DryRun -and $detected.Count -gt 1) {
         for ($i = 0; $i -lt $detected.Count; $i++) {
             $mark = " "
             if ($checked[$detected[$i]]) { $mark = "x" }
-            "  {0}) [{1}] {2}" -f ($i + 1), $mark, $detected[$i]
+            "{0}) [{1}] {2}" -f ($i + 1), $mark, $detected[$i]
         }
-        Write-Output "  a) select all     n) select none     <enter> = apply checked"
+        Write-Output "a) select all     n) select none     <enter> = apply checked"
         $line = Read-Line "toggle (e.g. 1 3), a=all, n=none, enter=apply "
         $choice = if ($null -eq $line) { "" } else { $line.Trim() }
 
@@ -853,10 +937,10 @@ if (-not $DryRun -and $detected.Count -gt 1) {
                             $f = $detected[$num - 1]
                             $checked[$f] = -not $checked[$f]
                         } else {
-                            Write-Output "  invalid: $num"
+                            Write-Output "invalid: $num"
                         }
                     } else {
-                        Write-Output "  invalid: $tok"
+                        Write-Output "invalid: $tok"
                     }
                 }
             }

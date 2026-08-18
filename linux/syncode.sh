@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
 #  syncode - Sync and manage your VS Code and VSCodium editors
-#  Version: 1.3.0
+#  Version: 1.4.0
 # ============================================================
 set -Eeuo pipefail
 
-VERSION="1.3.0"
+VERSION="1.4.0"
 TOOL_NAME="syncode"
 DESCRIPTION="Sync and manage your VS Code and VSCodium editors"
 
@@ -214,12 +214,22 @@ ext_ids() {
   grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"' "$CONFIG_DIR/extensions.json" | tr -d '"'
 }
 
+# installed_exts <fork> - list of installed extensions, cached per session
+# (invalidated by invalidate_exts after install/uninstall).
+declare -A EXT_CACHE=()
+
 installed_exts() {
   local cli
+  if [[ "${EXT_CACHE[$1]+set}" == set ]]; then
+    printf '%s' "${EXT_CACHE[$1]}"
+    return
+  fi
   cli="$(command -v "$1" 2>/dev/null || true)"
-  [[ -n "$cli" ]] || return 0
-  "$cli" --list-extensions </dev/null 2>/dev/null || true
+  EXT_CACHE[$1]="$( [[ -n "$cli" ]] && "$cli" --list-extensions </dev/null 2>/dev/null || true )"
+  printf '%s' "${EXT_CACHE[$1]}"
 }
+
+invalidate_exts() { unset "EXT_CACHE[$1]"; }
 
 editor_version() {
   local cli v
@@ -290,20 +300,20 @@ apply_fork() {
     if [[ "$REVERT" == true ]]; then
       if [[ -f "$bd" ]]; then
         mv -- "$bd" "$sp"
-        echo "    $fork: restored settings.json from .bak"
+        echo "$fork: restored settings.json from .bak"
       elif [[ -f "$sp" ]]; then
         rm -f -- "$sp"
-        echo "    $fork: deleted settings.json (factory defaults)"
+        echo "$fork: deleted settings.json (factory defaults)"
       else
-        echo "    $fork: no settings.json to revert"
+        echo "$fork: no settings.json to revert"
       fi
     else
       if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
-        echo "    $fork: settings already in sync"
+        echo "$fork: settings already in sync"
       else
         [[ -f "$sp" ]] && cp -- "$sp" "$bd"
         cp -- "$CONFIG_DIR/settings.json" "$sp"
-        echo "    $fork: settings copied (backup -> .bak)"
+        echo "$fork: settings copied (backup -> .bak)"
       fi
     fi
   fi
@@ -321,13 +331,13 @@ apply_fork() {
         for id in $want; do
           if printf '%s\n' "$(installed_exts "$fork")" | grep -qx "$id"; then
             "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
-            echo "    $fork: uninstalled $id"
+            echo "$fork: uninstalled $id"
           fi
         done
       else
         for id in $missing; do
           if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
-            echo "    $fork: installed $id"
+            echo "$fork: installed $id"
           else
             log_warn "$fork: FAILED to install $id"
           fi
@@ -335,12 +345,13 @@ apply_fork() {
       fi
     else
       if [[ "$scope" == all ]]; then
-        echo "    $fork: no CLI found - settings handled, extensions skipped"
+        echo "$fork: no CLI found - settings handled, extensions skipped"
       else
-        echo "    $fork: no CLI found - extensions skipped"
+        echo "$fork: no CLI found - extensions skipped"
       fi
     fi
   fi
+  invalidate_exts "$fork"
 }
 
 # ------------------------------------------------------------
@@ -391,19 +402,23 @@ resolve_cli() {
 # show_list_versions - -l / --list-versions table
 show_list_versions() {
   echo ""
-  printf '  %-10s %-12s %s\n' name installed latest
+  printf '%-10s %-12s %s\n' name installed latest
   local f inst
   for f in "${FORK_ORDER[@]}"; do
     inst="$(get_installed_version "$f")"
     [[ -z "$inst" ]] && inst="-"
-    printf '  %-10s %-12s %s\n' "$f" "$inst" "$(latest_for "$f")"
+    printf '%-10s %-12s %s\n' "$f" "$inst" "$(latest_for "$f")"
   done
 }
 
-# render_dashboard - one row per fork: name / installed / latest / settings / extensions
+# render_dashboard - one row per fork: name / installed / latest / settings /
+# extensions, drawn as a boxed grid. Column width = longest cell (header or
+# value) + 2 padding so nothing ever overflows; ASCII-only box (PS 5.1 can't
+# render box-drawing glyphs, and the bash/ps1 output stays byte-identical).
+# The header row is bold when stdout is a TTY.
 render_dashboard() {
-  printf '  %-8s %-12s %-12s %-9s %s\n' name installed latest settings extensions
-  local f inst latest settings ext missing cli
+  local f inst latest settings ext missing cli i
+  local -a hdr=(Name Installed Latest Settings Extensions) w=() rows=() vals
   for f in "${FORK_ORDER[@]}"; do
     inst="$(get_installed_version "$f")"
     [[ -z "$inst" ]] && inst="-"
@@ -429,8 +444,51 @@ render_dashboard() {
     else
       ext="n/a"
     fi
-    printf '  %-8s %-12s %-12s %-9s %s\n' "$f" "$inst" "$latest" "$settings" "$ext"
+    rows+=("$f|$inst|$latest|$settings|$ext")
   done
+  for i in 0 1 2 3 4; do
+    w[$i]=${#hdr[$i]}
+    for r in "${rows[@]}"; do
+      IFS='|' read -ra vals <<< "$r"
+      (( ${#vals[$i]} > w[$i] )) && w[$i]=${#vals[$i]}
+    done
+    w[$i]=$(( w[$i] + 2 ))
+  done
+  local esc=$'\e' bold="" reset=""
+  [[ -t 1 ]] && { bold="$esc[1m"; reset="$esc[0m"; }
+  local border="+" dash=""
+  for i in 0 1 2 3 4; do
+    printf -v dash '%*s' "${w[$i]}" ''
+    border+="${dash// /-}+"
+  done
+  printf '%s\n' "$border"
+  printf '|'
+  for i in 0 1 2 3 4; do
+    printf ' %s%-*s%s |' "$bold" "$(( w[$i] - 2 ))" "${hdr[$i]}" "$reset"
+  done
+  printf '\n%s\n' "$border"
+  for r in "${rows[@]}"; do
+    IFS='|' read -ra vals <<< "$r"
+    printf '|'
+    for i in 0 1 2 3 4; do
+      printf ' %-*s |' "$(( w[$i] - 2 ))" "${vals[$i]}"
+    done
+    printf '\n'
+  done
+  printf '%s\n' "$border"
+}
+
+# redraw_frame <notice> - repaint the whole dashboard: clear (TTY only), banner,
+# status table, optional notice line. Called at the top of every menu loop so
+# each pick swaps the view instead of stacking. No clear when output is
+# redirected (CI, pipes) so the transcript stays readable.
+redraw_frame() {
+  [[ -t 1 ]] && printf '\033[2J\033[H'
+  banner
+  echo ""
+  render_dashboard
+  [[ -n "${1:-}" ]] && printf '%s\n' "$1"
+  echo ""
 }
 
 # ------------------------------------------------------------
@@ -515,7 +573,7 @@ install_editor() {
   local fork="$1" ver="$2" url tmp dest
   ver="${ver:-$(latest_for "$fork")}"
   [[ "$ver" == "unknown" ]] && { log_error "$fork: can't determine latest version"; return 1; }
-  echo "  $fork: installing $ver ..."
+  echo "$fork: installing $ver ..."
   if command -v apt-get >/dev/null 2>&1; then
     url="$(release_installer_url "$fork" linux)"
     tmp="$(mktemp --suffix=.deb)"
@@ -543,7 +601,10 @@ install_editor() {
       || { log_error "$fork: extract failed"; rm -f "$HOME/.cache/syncode-${fork}.tar.gz"; return 1; }
     rm -f "$HOME/.cache/syncode-${fork}.tar.gz"
   fi
-  echo "  $fork installed"
+  echo "$fork installed"
+  invalidate_installed "$fork"
+  invalidate_exts "$fork"
+  invalidate_latest "$fork"
 }
 
 # uninstall_editor <fork> - pkg manager remove + config dir; tarball -> rm -rf.
@@ -559,86 +620,103 @@ uninstall_editor() {
   dir="$HOME/.local/share/${FORK_DIR[$fork]}"
   [[ -d "$dir" ]] && rm -rf -- "$dir"
   rm -rf -- "$DATA_ROOT/${FORK_DIR[$fork]}"
-  echo "  $fork removed"
+  echo "$fork removed"
+  invalidate_installed "$fork"
+  invalidate_exts "$fork"
+  invalidate_latest "$fork"
 }
 
 # show_action_help - shared help text offered by the Help option in every menu.
 show_action_help() {
-  echo "  install    install latest stable if not installed"
-  echo "  settings   copy settings.json (backup .bak) to the editor"
-  echo "  extensions pick which extensions to install/uninstall"
-  echo '  reset      restore factory defaults  (type "reset" to confirm)'
-  echo '  uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
+  echo "install    install latest stable if not installed"
+  echo "settings   copy settings.json (backup .bak) to the editor"
+  echo "extensions pick which extensions to install/uninstall"
+  echo 'reset      restore factory defaults  (type "reset" to confirm)'
+  echo 'uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
 }
 
 # pick_extensions <fork> - multiselect extension manager: toggle with numbers,
 # a=all, n=none, i=install selected, u=uninstall selected, h=help, m=back to
 # the config menu, q=quit. Only toggle state lives here; i/u run the CLI.
+# Feedback goes to DASH_NOTICE so the repainted frame keeps showing it.
 pick_extensions() {
   local fork="$1" ids=() id n line
   declare -A sel
   mapfile -t ids < <(ext_ids)
   if [[ ${#ids[@]} -eq 0 ]]; then
-    echo "  no extensions in extensions.json"
+    DASH_NOTICE="no extensions in extensions.json"
     return
   fi
   while true; do
-    echo "  ${FORK_FULL[$fork]} extensions"
+    redraw_frame "$DASH_NOTICE"
+    echo "${FORK_FULL[$fork]} extensions"
+    echo "Pick an option:"
+    echo ""
     for id in "${!ids[@]}"; do
       local mark=" "
       [[ -n "${sel[${ids[$id]}]:-}" ]] && mark="x"
-      printf '    %d. [%s] %s\n' "$((id + 1))" "$mark" "${ids[$id]}"
+      printf '%d. [%s] %s\n' "$((id + 1))" "$mark" "${ids[$id]}"
     done
-    echo "  a. All  n. None  i. Install selected  u. Uninstall selected"
-    echo "  h. Help  m. Menu  q. Quit"
-    read -r -p "  Enter an option: " line || line="q"
+    echo "a. All  n. None  i. Install selected  u. Uninstall selected"
+    echo "h. Help  m. Menu  q. Quit"
+    echo ""
+    read -r -p "Enter an option: " line || line="q"
     line="${line%$'\r'}"
     if [[ "$line" =~ ^[0-9]+$ ]]; then
       n=$((10#$line - 1))
       if (( n >= 0 && n < ${#ids[@]} )); then
         id="${ids[$n]}"
         if [[ -n "${sel[$id]:-}" ]]; then unset "sel[$id]"; else sel[$id]="1"; fi
+        DASH_NOTICE=""
       else
-        echo "invalid: $line"
+        DASH_NOTICE="invalid: $line"
       fi
       continue
     fi
     case "$line" in
       a|A)
         for id in "${ids[@]}"; do sel[$id]="1"; done
+        DASH_NOTICE="all selected"
         ;;
       n|N)
         sel=()
+        DASH_NOTICE="none selected"
         ;;
       i|I)
         local cli picked=()
         cli="$(command -v "$fork" 2>/dev/null || true)"
-        if [[ -z "$cli" ]]; then echo "  $fork not on PATH - cannot install"; continue; fi
+        if [[ -z "$cli" ]]; then DASH_NOTICE="$fork not on PATH - cannot install"; continue; fi
         for id in "${ids[@]}"; do [[ -n "${sel[$id]:-}" ]] && picked+=("$id"); done
-        if [[ ${#picked[@]} -eq 0 ]]; then echo "  nothing selected"; continue; fi
+        if [[ ${#picked[@]} -eq 0 ]]; then DASH_NOTICE="nothing selected"; continue; fi
+        local out=""
         for id in "${picked[@]}"; do
           if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
-            echo "    installed $id"
+            out+="installed $id"$'\n'
           else
             log_warn "$fork: FAILED to install $id"
           fi
         done
         sel=()
+        DASH_NOTICE="${out%$'\n'}"
+        invalidate_exts "$fork"
         ;;
       u|U)
         local cli picked=()
         cli="$(command -v "$fork" 2>/dev/null || true)"
-        if [[ -z "$cli" ]]; then echo "  $fork not on PATH - cannot uninstall"; continue; fi
+        if [[ -z "$cli" ]]; then DASH_NOTICE="$fork not on PATH - cannot uninstall"; continue; fi
         for id in "${ids[@]}"; do [[ -n "${sel[$id]:-}" ]] && picked+=("$id"); done
-        if [[ ${#picked[@]} -eq 0 ]]; then echo "  nothing selected"; continue; fi
+        if [[ ${#picked[@]} -eq 0 ]]; then DASH_NOTICE="nothing selected"; continue; fi
+        local out=""
         for id in "${picked[@]}"; do
           "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
-          echo "    uninstalled $id"
+          out+="uninstalled $id"$'\n'
         done
         sel=()
+        DASH_NOTICE="${out%$'\n'}"
+        invalidate_exts "$fork"
         ;;
       h|H)
-        show_action_help
+        DASH_NOTICE="$(show_action_help)"
         ;;
       m|M)
         return
@@ -646,7 +724,7 @@ pick_extensions() {
       q|Q)
         echo "bye."; exit 0
         ;;
-      *) echo "invalid: $line" ;;
+      *) DASH_NOTICE="invalid: $line" ;;
     esac
   done
 }
@@ -654,27 +732,28 @@ pick_extensions() {
 # run_dashboard - interactive hub: pick editor, pick action, loop. Numbered
 # menus; every menu offers Help + Quit, non-first menus add Menu (back to the
 # editor picker). The editor's full name is shown above the action menu.
+# Each loop iteration repaints the full frame (banner + table + notice + menu).
 run_dashboard() {
   local line editor action
   while true; do
-    echo ""
-    render_dashboard
-    echo ""
     editor=""
     while true; do
-      echo "  Pick an option:"
-      echo "    1. Visual Studio Code"
-      echo "    2. VSCodium"
-      echo "    3. Help"
-      echo "    4. Quit"
-      read -r -p "  Enter an option: " line || line="q"
+      redraw_frame "$DASH_NOTICE"
+      echo "Pick an option:"
+      echo ""
+      echo "1. Visual Studio Code"
+      echo "2. VSCodium"
+      echo "3. Help"
+      echo "4. Quit"
+      echo ""
+      read -r -p "Enter an option: " line || line="q"
       line="${line%$'\r'}"
       case "$line" in
         q|Q|4) echo "bye."; exit 0 ;;
         code|1) editor="code"; break ;;
         codium|2) editor="codium"; break ;;
-        3) show_action_help ;;
-        *) echo "invalid: $line" ;;
+        3) DASH_NOTICE="$(show_action_help)" ;;
+        *) DASH_NOTICE="invalid: $line" ;;
       esac
     done
     while true; do
@@ -682,13 +761,15 @@ run_dashboard() {
       opts+=(Install)
       if [[ -n "$(get_installed_version "$editor")" ]]; then opts+=(Config); fi
       opts+=(Reset Uninstall Help Menu Quit)
-      echo "  ${FORK_FULL[$editor]}"
-      echo "  Pick an option:"
+      redraw_frame "$DASH_NOTICE"
+      echo "Pick an option for ${FORK_FULL[$editor]}:"
+      echo ""
       local i
       for i in "${!opts[@]}"; do
-        echo "    $((i+1)). ${opts[$i]}"
+        echo "$((i+1)). ${opts[$i]}"
       done
-      read -r -p "  Enter an option: " action || action="q"
+      echo ""
+      read -r -p "Enter an option: " action || action="q"
       action="${action%$'\r'}"
       local sel=""
       if [[ "$action" =~ ^[0-9]+$ ]]; then
@@ -706,31 +787,33 @@ run_dashboard() {
         config) action="config"; break ;;
         reset) action="reset"; break ;;
         uninstall) action="uninstall"; break ;;
-        help) show_action_help ;;
+        help) DASH_NOTICE="$(show_action_help)" ;;
         menu) continue 2 ;;
         quit|q) echo "bye."; exit 0 ;;
-        *) echo "invalid: $action" ;;
+        *) DASH_NOTICE="invalid: $action" ;;
       esac
     done
     case "$action" in
       config)
         while true; do
-          echo "  ${FORK_FULL[$editor]}"
-          echo "  Pick an option:"
-          echo "    1. Settings"
-          echo "    2. Extensions"
-          echo "    3. Help"
-          echo "    4. Menu"
-          echo "    5. Quit"
-          read -r -p "  Enter an option: " line || line="q"
+          redraw_frame "$DASH_NOTICE"
+          echo "Pick an option for ${FORK_FULL[$editor]}:"
+          echo ""
+          echo "1. Settings"
+          echo "2. Extensions"
+          echo "3. Help"
+          echo "4. Menu"
+          echo "5. Quit"
+          echo ""
+          read -r -p "Enter an option: " line || line="q"
           line="${line%$'\r'}"
           case "$line" in
             1) apply_fork "$editor" settings || true ;;
             2) pick_extensions "$editor" ;;
-            3) show_action_help ;;
+            3) DASH_NOTICE="$(show_action_help)" ;;
             4) continue 2 ;;
             5|q|Q) echo "bye."; exit 0 ;;
-            *) echo "invalid: $line" ;;
+            *) DASH_NOTICE="invalid: $line" ;;
           esac
         done
         ;;
@@ -739,8 +822,9 @@ run_dashboard() {
         line="${line%$'\r'}"
         if [[ "$line" == "reset" ]]; then
           REVERT=true; apply_fork "$editor" || true; REVERT=false
+          DASH_NOTICE="$editor reset to factory defaults"
         else
-          echo "  not confirmed - skipped"
+          DASH_NOTICE="not confirmed - skipped"
         fi
         ;;
       uninstall)
@@ -748,17 +832,17 @@ run_dashboard() {
         line="${line%$'\r'}"
         if [[ "$line" == "uninstall" ]]; then
           uninstall_editor "$editor" || true
-          invalidate_latest "$editor"
+          DASH_NOTICE="$editor uninstalled"
         else
-          echo "  not confirmed - skipped"
+          DASH_NOTICE="not confirmed - skipped"
         fi
         ;;
       install)
         if [[ -n "$(get_installed_version "$editor")" ]]; then
-          echo "  $editor already installed"
+          DASH_NOTICE="$editor already installed"
         else
           install_editor "$editor" || true
-          invalidate_latest "$editor"
+          DASH_NOTICE="$editor installed"
         fi
         ;;
     esac
@@ -768,11 +852,12 @@ run_dashboard() {
 # ------------------------------------------------------------
 #  Main
 # ------------------------------------------------------------
-banner
 detect_forks
+DASH_NOTICE=""
 
 # action flags take priority (list-versions / install / uninstall)
 if [[ -n "$ACTION" ]]; then
+  banner
   local_action_forks=("${FORK_ORDER[@]}")
   if [[ -n "$ACTION_FORK" ]]; then
     case "$ACTION_FORK" in
@@ -786,7 +871,7 @@ if [[ -n "$ACTION" ]]; then
   fi
   if [[ "$DRY_RUN" == true ]]; then
     echo ""
-    printf '  %-10s %-12s %-12s %s\n' name installed latest action
+    printf '%-10s %-12s %-12s %s\n' name installed latest action
     f=""; inst=""; latest=""; desc=""
     for f in "${local_action_forks[@]}"; do
       inst="$(get_installed_version "$f")"
@@ -796,7 +881,7 @@ if [[ -n "$ACTION" ]]; then
         install)   desc="install $latest" ;;
         uninstall) desc="remove editor + config" ;;
       esac
-      printf '  %-10s %-12s %-12s %s\n' "$f" "$inst" "$latest" "$desc"
+      printf '%-10s %-12s %-12s %s\n' "$f" "$inst" "$latest" "$desc"
     done
     echo "DRY RUN - nothing applied."
     exit 0
@@ -814,7 +899,7 @@ if [[ -n "$ACTION" ]]; then
     case "$ACTION" in
       install)
         if [[ -n "$(get_installed_version "$f")" ]]; then
-          echo "  $f already installed"
+          echo "$f already installed"
         else
           install_editor "$f"
         fi
@@ -833,17 +918,18 @@ if [[ "$REVERT" == false && "$DRY_RUN" == false ]]; then
 fi
 
 # plan table
+banner
 echo "Plan:"
 if [[ "$REVERT" == true ]]; then
-  echo "  mode: revert to factory defaults"
+  echo "mode: revert to factory defaults"
 fi
-printf '  %-10s %-12s %s\n' "name" "version" "status"
-printf '  %-10s %-12s %s\n' "----" "-------" "------"
+printf '%-10s %-12s %s\n' "name" "version" "status"
+printf '%-10s %-12s %s\n' "----" "-------" "------"
 for f in "${FORK_ORDER[@]}"; do
   if printf '%s\n' "${detected[@]}" | grep -qx "$f"; then
-    printf '  %-10s %-12s %s\n' "$f" "$(editor_version "$f")" "$(plan_fork "$f")"
+    printf '%-10s %-12s %s\n' "$f" "$(editor_version "$f")" "$(plan_fork "$f")"
   else
-    printf '  %-10s %-12s %s\n' "$f" "n/a" "not installed"
+    printf '%-10s %-12s %s\n' "$f" "n/a" "not installed"
   fi
 done
 
@@ -864,10 +950,10 @@ if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
       if [[ "${checked[$f]}" -eq 1 ]]; then
         mark="x"
       fi
-      printf '  %d) [%s] %s\n' "$i" "$mark" "$f"
+      printf '%d) [%s] %s\n' "$i" "$mark" "$f"
       i=$((i + 1))
     done
-    echo "  a) select all     n) select none     <enter> = apply checked"
+    echo "a) select all     n) select none     <enter> = apply checked"
     read -r -p "toggle (e.g. 1 3), a=all, n=none, enter=apply: " input
     input="${input%$'\r'}"
 
@@ -881,7 +967,7 @@ if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
             f="${detected[$((num - 1))]}"
             checked[$f]=$((1 - checked[$f]))
           else
-            echo "  invalid: $num"
+            echo "invalid: $num"
           fi
         done
         ;;
