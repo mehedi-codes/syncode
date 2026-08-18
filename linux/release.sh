@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  syncode release module (Linux/bash)
-#  Loads src/shared/releases.json, fetches latest versions,
+#  Loads shared/releases.json (via ../shared), fetches latest versions,
 #  builds installer URLs. Sourced by syncode.sh.
 # ============================================================
 set -Eeuo pipefail

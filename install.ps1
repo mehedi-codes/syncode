@@ -22,10 +22,12 @@ $ErrorActionPreference = "Stop"
 $REPO_RAW = "https://raw.githubusercontent.com/mehedi-codes/syncode/main"
 # src-path -> flat dst (syncode.ps1 expects configs beside it in the temp dir)
 $FILES = @(
-    @{ Src = "src/windows/syncode.ps1";      Dst = "syncode.ps1" },
-    @{ Src = "src/shared/settings.json";     Dst = "settings.json" },
-    @{ Src = "src/shared/extensions.json";   Dst = "extensions.json" },
-    @{ Src = "src/shared/releases.json";     Dst = "releases.json" }
+    @{ Src = "windows/syncode.ps1";      Dst = "syncode.ps1" },
+    @{ Src = "windows/version.ps1";      Dst = "version.ps1" },
+    @{ Src = "windows/release.ps1";      Dst = "release.ps1" },
+    @{ Src = "shared/settings.json";     Dst = "settings.json" },
+    @{ Src = "shared/extensions.json";   Dst = "extensions.json" },
+    @{ Src = "shared/releases.json";     Dst = "releases.json" }
 )
 
 # TLS 1.2+ required for GitHub on Windows PowerShell 5.1 (defaults to TLS 1.0)

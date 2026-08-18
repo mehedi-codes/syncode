@@ -9,10 +9,12 @@ set -Eeuo pipefail
 
 REPO_RAW="https://raw.githubusercontent.com/mehedi-codes/syncode/main"
 FILES=(
-  "src/linux/syncode.sh:syncode.sh"
-  "src/shared/settings.json:settings.json"
-  "src/shared/extensions.json:extensions.json"
-  "src/shared/releases.json:releases.json"
+  "linux/syncode.sh:syncode.sh"
+  "linux/version.sh:version.sh"
+  "linux/release.sh:release.sh"
+  "shared/settings.json:settings.json"
+  "shared/extensions.json:extensions.json"
+  "shared/releases.json:releases.json"
 )
 
 # Guard: curl required (no git involved)

@@ -245,7 +245,7 @@ function Apply-Fork($fork) {
 
 $script:LatestCache = @{}
 
-# Get-LatestCached <fork> — latest version (or "unknown"), cached per session.
+# Get-LatestCached <fork> - latest version (or "unknown"), cached per session.
 function Get-LatestCached($fork) {
     if ($script:LatestCache.ContainsKey($fork)) { return $script:LatestCache[$fork] }
     $v = "unknown"
@@ -255,8 +255,8 @@ function Get-LatestCached($fork) {
 }
 function Reset-LatestCache($fork) { $script:LatestCache.Remove($fork) | Out-Null }
 
-# Resolve-Cli <fork> — PATH first, else known install-path binary
-# (closes the fresh-install dead-end: install → config in the same session).
+# Resolve-Cli <fork> - PATH first, else known install-path binary
+# (closes the fresh-install dead-end: install -> config in the same session).
 function Resolve-Cli($fork) {
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
     if ($cli) { return $cli.Source }
@@ -269,32 +269,32 @@ function Resolve-Cli($fork) {
     return ""
 }
 
-# Show-ListVersions — -l / --list-versions table
+# Show-ListVersions - -l / --list-versions table
 function Show-ListVersions {
     "{0,-10} {1,-12} {2}" -f "name", "installed", "latest"
     foreach ($f in $FORK_ORDER) {
         $inst = Get-InstalledVersion $f
-        if (-not $inst) { $inst = "—" }
+        if (-not $inst) { $inst = "-" }
         "{0,-10} {1,-12} {2}" -f $f, $inst, (Get-LatestCached $f)
     }
 }
 
-# Show-Dashboard — one row per fork: name / installed / latest / settings / extensions
+# Show-Dashboard - one row per fork: name / installed / latest / settings / extensions
 function Show-Dashboard {
     "{0,-8} {1,-12} {2,-12} {3,-9} {4}" -f "name", "installed", "latest", "settings", "extensions"
     foreach ($f in $FORK_ORDER) {
         $inst = Get-InstalledVersion $f
-        if (-not $inst) { $inst = "—" }
+        if (-not $inst) { $inst = "-" }
         $latest = Get-LatestCached $f
         $sp = Get-SettingsPath $f
         if (Test-Path $sp) {
             if (Test-SameSettings $sp (Join-Path $CONFIG_DIR "settings.json")) {
-                $settings = "✓ synced"
+                $settings = "synced"
             } else {
                 $settings = "diverged"
             }
         } else {
-            $settings = "—"
+            $settings = "-"
         }
         $cli = Resolve-Cli $f
         if ($cli) {
@@ -307,7 +307,7 @@ function Show-Dashboard {
     }
 }
 
-# Install-Editor <fork> — download (syncode temp name) + silent install
+# Install-Editor <fork> - download (syncode temp name) + silent install
 # (/VERYSILENT /NORESTART /mergetasks=!runcode so the editor doesn't relaunch).
 # "already installed" check lives at the call sites; update calls straight
 # through so the Inno installer can upgrade in place.
@@ -329,14 +329,14 @@ function Install-Editor($fork) {
     Write-Output "  $fork installed"
 }
 
-# Update-Editor <fork> — upgrade if installed < latest; no-op if current.
-# Failures throw (flag mode → exit 1; dashboard → caught, loop continues).
+# Update-Editor <fork> - upgrade if installed < latest; no-op if current.
+# Failures throw (flag mode -> exit 1; dashboard -> caught, loop continues).
 function Update-Editor($fork) {
     $inst = Get-InstalledVersion $fork
     $latest = Get-LatestCached $fork
-    if (-not $inst) { Write-Output "  $fork not installed — use install"; return }
+    if (-not $inst) { Write-Output "  $fork not installed - use install"; return }
     if ($latest -eq "unknown") {
-        if ($script:RateLimited) { throw "${fork}: GitHub API rate limit hit — try later" }
+        if ($script:RateLimited) { throw "${fork}: GitHub API rate limit hit - try later" }
         else                     { throw "${fork}: can't check for updates (network unavailable)" }
     }
     if ((Compare-Version $inst $latest) -lt 0) {
@@ -347,7 +347,7 @@ function Update-Editor($fork) {
     }
 }
 
-# Uninstall-Editor <fork> — unins000.exe /VERYSILENT, winget fallback, config dir.
+# Uninstall-Editor <fork> - unins000.exe /VERYSILENT, winget fallback, config dir.
 function Uninstall-Editor($fork) {
     $dir = Join-Path $env:LOCALAPPDATA "Programs\$($FORK_DIR[$fork])"
     $un = Join-Path $dir "unins000.exe"
@@ -357,14 +357,14 @@ function Uninstall-Editor($fork) {
         if ($p.ExitCode -ne 0) { Write-LogWarn "${fork}: uninstaller exit $($p.ExitCode)" }
     } else {
         $id = Get-ReleaseWinget $fork
-        Write-Output "  ${fork}: unins000.exe not found — winget fallback: $id"
+        Write-Output "  ${fork}: unins000.exe not found - winget fallback: $id"
         winget uninstall --id $id --silent --accept-source-agreements | Out-Null
     }
     Remove-Item -Recurse -Force (Join-Path $DATA_ROOT $FORK_DIR[$fork]) -ErrorAction SilentlyContinue
     Write-Output "  $fork removed"
 }
 
-# Run-Dashboard — interactive hub: pick editor, pick action, loop. q quits.
+# Run-Dashboard - interactive hub: pick editor, pick action, loop. q quits.
 function Run-Dashboard {
     while ($true) {
         Write-Output ""
@@ -424,7 +424,7 @@ function Run-Dashboard {
                         Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
                     }
                 } else {
-                    Write-Output "  not confirmed — skipped"
+                    Write-Output "  not confirmed - skipped"
                 }
             }
             "uninstall" {
@@ -434,7 +434,7 @@ function Run-Dashboard {
                     catch { Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red }
                     Reset-LatestCache $editor
                 } else {
-                    Write-Output "  not confirmed — skipped"
+                    Write-Output "  not confirmed - skipped"
                 }
             }
             "install" {
@@ -454,7 +454,7 @@ function Run-Dashboard {
     }
 }
 
-# Resolve-ActionForks <arg> — empty = all forks, else one fork (code|codium).
+# Resolve-ActionForks <arg> - empty = all forks, else one fork (code|codium).
 function Resolve-ActionForks($arg) {
     if (-not $arg) { return @($FORK_ORDER) }
     switch ($arg) {
@@ -509,7 +509,7 @@ if ($action) {
             }
             "{0,-10} {1,-12} {2,-12} {3}" -f $f, $inst, $latest, $desc
         }
-        Write-Output "DRY RUN — nothing applied."
+        Write-Output "DRY RUN - nothing applied."
         exit 0
     }
     Write-Output ""
@@ -537,7 +537,7 @@ if ($action) {
     exit 0
 }
 
-# no flags → interactive dashboard
+# no flags -> interactive dashboard
 if (-not $Revert -and -not $DryRun) {
     Run-Dashboard
     exit 0

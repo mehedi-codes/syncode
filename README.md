@@ -56,27 +56,27 @@ Prefer cloning? The repo runs directly too — see [Usage](#usage).
 **Linux:**
 
 ```bash
-bash src/linux/syncode.sh        # interactive dashboard (no flags)
-bash src/linux/syncode.sh -d     # preview the plan, change nothing
-bash src/linux/syncode.sh -r     # restore editors to factory defaults
-bash src/linux/syncode.sh -l     # show installed vs latest versions
-bash src/linux/syncode.sh -i     # install latest stable for all editors
-bash src/linux/syncode.sh -i codium   # install just VSCodium
-bash src/linux/syncode.sh -u     # update all editors to latest
-bash src/linux/syncode.sh -rm    # uninstall all editors + config dirs
+bash linux/syncode.sh        # interactive dashboard (no flags)
+bash linux/syncode.sh -d     # preview the plan, change nothing
+bash linux/syncode.sh -r     # restore editors to factory defaults
+bash linux/syncode.sh -l     # show installed vs latest versions
+bash linux/syncode.sh -i     # install latest stable for all editors
+bash linux/syncode.sh -i codium   # install just VSCodium
+bash linux/syncode.sh -u     # update all editors to latest
+bash linux/syncode.sh -rm    # uninstall all editors + config dirs
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-.\src\windows\syncode.ps1        # interactive dashboard (no flags)
-.\src\windows\syncode.ps1 -d     # preview the plan, change nothing
-.\src\windows\syncode.ps1 -r     # restore editors to factory defaults
-.\src\windows\syncode.ps1 -l     # show installed vs latest versions
-.\src\windows\syncode.ps1 -i     # install latest stable for all editors
-.\src\windows\syncode.ps1 -i codium       # install just VSCodium
-.\src\windows\syncode.ps1 -u     # update all editors to latest
-.\src\windows\syncode.ps1 -rm    # uninstall all editors + config dirs
+.\windows\syncode.ps1        # interactive dashboard (no flags)
+.\windows\syncode.ps1 -d     # preview the plan, change nothing
+.\windows\syncode.ps1 -r     # restore editors to factory defaults
+.\windows\syncode.ps1 -l     # show installed vs latest versions
+.\windows\syncode.ps1 -i     # install latest stable for all editors
+.\windows\syncode.ps1 -i codium       # install just VSCodium
+.\windows\syncode.ps1 -u     # update all editors to latest
+.\windows\syncode.ps1 -rm    # uninstall all editors + config dirs
 ```
 
 ### Options
@@ -145,13 +145,13 @@ confirm. `q` quits; invalid input just re-prompts.
 ## Reverting (factory defaults)
 
 ```bash
-bash src/linux/syncode.sh -r      # interactive selection, then confirm
-bash src/linux/syncode.sh -r -d   # plan for all editor families, apply nothing
+bash linux/syncode.sh -r      # interactive selection, then confirm
+bash linux/syncode.sh -r -d   # plan for all editor families, apply nothing
 ```
 
 ```powershell
-.\src\windows\syncode.ps1 -r      # interactive selection, then confirm
-.\src\windows\syncode.ps1 -r -d   # plan for all editor families, apply nothing
+.\windows\syncode.ps1 -r      # interactive selection, then confirm
+.\windows\syncode.ps1 -r -d   # plan for all editor families, apply nothing
 ```
 
 For each selected editor, revert:
@@ -166,18 +166,18 @@ For each selected editor, revert:
 ```
 install.sh        one-time runner (root — curl-fetches tool + configs)
 install.ps1       one-time runner (root — irm/Invoke-WebRequest fetches + runs)
-src/linux/        syncode.sh + version.sh + release.sh — Linux deploy (bash)
-src/windows/      syncode.ps1 + version.ps1 + release.ps1 — Windows (PowerShell)
-src/shared/       settings.json + extensions.json + releases.json + extensions.md
-                  (shared by both platforms; configs are found via ../shared
-                  from a checkout, or beside the script in the install temp dir)
+linux/            syncode.sh + version.sh + release.sh — Linux deploy (bash)
+windows/          syncode.ps1 + version.ps1 + release.ps1 — Windows (PowerShell)
+shared/           settings.json + extensions.json + releases.json + extensions.md
+                  (configs live in shared/; scripts find them via ../shared in a
+                  checkout, or beside the script in the install temp dir)
 ```
 
 `releases.json` maps each editor fork to its release API, installer URLs,
 uninstall method, and winget id — it's what powers `-i/-u/-rm/-l` and the
 dashboard's latest column. Version comparison lives in `version.sh`/`.ps1`;
 release lookups in `release.sh`/`.ps1`. Each module has a self-check that
-runs when executed directly (e.g. `bash src/linux/release.sh`).
+runs when executed directly (e.g. `bash linux/release.sh`).
 
 ## Notes
 

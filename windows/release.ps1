@@ -1,6 +1,6 @@
 # ============================================================
 #  syncode release module (Windows/PowerShell)
-#  Loads src/shared/releases.json, fetches latest versions,
+#  Loads shared/releases.json (via ..\shared), fetches latest versions,
 #  builds installer URLs. Dot-sourced by syncode.ps1.
 # ============================================================
 
@@ -27,7 +27,7 @@ function Get-ReleaseUninstallExe($fork)     { return (Get-Releases).$fork.uninst
 function Get-ReleaseUninstallName($fork)    { return (Get-Releases).$fork.uninstall.linux.name }
 function Get-ReleaseWinget($fork)           { return (Get-Releases).$fork.package.winget }
 
-# Get-LatestVersion <fork> — latest version string.
+# Get-LatestVersion <fork> - latest version string.
 # Sets $script:RateLimited = $true when codium hit GitHub's 403 rate limit.
 function Get-LatestVersion($fork) {
     $script:RateLimited = $false

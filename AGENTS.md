@@ -8,43 +8,56 @@ Guidance for AI agents working in this repository.
 (settings + extensions) to every installed editor fork. It detects which
 editors are present, shows a plan, asks for confirmation, then copies
 `settings.json` and installs missing extensions. It can also revert editors
-to factory defaults.
+to factory defaults, install/update/uninstall editor binaries (VS Code,
+VSCodium) via release-channel lookups, and show installed-vs-latest versions.
+No flags opens an interactive dashboard.
 
 There is **no build step, no package manager, no tests, no CI**. The tool is
-four scripts (two bash, two PowerShell); everything else is data or docs.
+three bash + three PowerShell scripts under `linux/`/`windows/`, plus config
+data under `shared/`; everything else is docs.
 
 ## Repository layout
 
 | File | Role |
 | --- | --- |
-| `install.sh` | Linux one-time runner (root): curl-fetches `src/linux/syncode.sh` + configs into a temp dir and runs them. Requires curl. |
-| `install.ps1` | Windows one-time runner (root): `Invoke-WebRequest` fetches `src/windows/syncode.ps1` + configs into a temp dir and runs them. |
-| `src/linux/syncode.sh` | The whole Linux tool (~400 lines, bash). |
-| `src/windows/syncode.ps1` | The whole Windows tool (PowerShell). |
-| `src/shared/settings.json` | Source-of-truth editor settings (JSONC). Applied to every selected editor. |
-| `src/shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
-| `src/shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
+| `install.sh` | Linux one-time runner (root): curl-fetches `linux/syncode.sh` + configs into a temp dir and runs them. Requires curl. |
+| `install.ps1` | Windows one-time runner (root): `Invoke-WebRequest` fetches `windows/syncode.ps1` + configs into a temp dir and runs them. |
+| `linux/syncode.sh` | The whole Linux tool (~740 lines, bash). |
+| `linux/version.sh` | Linux version comparison module (sourced by `syncode.sh`). |
+| `linux/release.sh` | Linux release lookups: reads `releases.json`, fetches latest versions, builds installer URLs (sourced by `syncode.sh`). |
+| `windows/syncode.ps1` | The whole Windows tool (PowerShell). |
+| `windows/version.ps1` | Windows version comparison module (dot-sourced by `syncode.ps1`). |
+| `windows/release.ps1` | Windows release lookups (dot-sourced by `syncode.ps1`). |
+| `shared/settings.json` | Source-of-truth editor settings (JSONC). Applied to every selected editor. |
+| `shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
+| `shared/releases.json` | Per-fork release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers `-i/-u/-rm/-l` and the dashboard's latest column. |
+| `shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
 | `README.md` | User-facing docs. Keep in sync if CLI behavior changes. |
+
+Platform dirs (`linux/`, `windows/`) hold the scripts; `shared/` holds the
+configs. Scripts resolve configs beside themselves (install temp dir, where
+the installers flatten everything) or via `../shared` (repo checkout).
 
 ## Technology
 
 - **Linux: pure bash 4+** — no external dependencies beyond standard
-  coreutils (`grep`, `cmp`, `cp`, `mv`, `rm`, `mktemp`, `printf`, `tr`,
-  `uname`). Uses associative arrays, `[[ ]]`, background jobs for parallel
-  detection. `install.sh` additionally needs `curl` (no git involved).
+  coreutils (`grep`, `sed`, `cmp`, `cp`, `mv`, `rm`, `mktemp`, `printf`,
+  `tr`, `uname`). Uses associative arrays, `[[ ]]`, background jobs for
+  parallel detection. `install.sh` additionally needs `curl` (no git
+  involved); `release.sh` uses `curl` for latest-version lookups.
 - **Windows: PowerShell 5.1+** — `syncode.ps1` uses built-in cmdlets only
-  (`Invoke-WebRequest`, `Get-Command`, `Get-FileHash`, `Read-Host`); no
+  (`Invoke-WebRequest`, `Get-Command`, `Get-FileHash`, `[Console]::In`); no
   modules, no curl. `install.ps1` pins TLS 1.2 for 5.1.
 - The two implementations are **feature-identical ports**; keep them in
   lockstep (same flags, same output, same version string).
-- **JSONC** (`settings.json`, `extensions.json`) — comments are valid and used
-  as section headers (`//! Visual / UI`, etc.).
+- **JSONC** (`settings.json`, `extensions.json`, `releases.json`) — comments
+  are valid and used as section headers (`//! Visual / UI`, etc.).
 - **No Makefile, no lockfile, no npm/pip/anything.** Running the script IS the
   usage; there's nothing to install.
 
 ## How it works
 
-Flow: `detect → plan → select → confirm → apply`.
+Flow (apply/revert): `detect → plan → select → confirm → apply`.
 
 1. **Detect** (`detect_forks`): checks each of `code codium` on PATH or by its
    config directory, in parallel background jobs.
@@ -55,6 +68,12 @@ Flow: `detect → plan → select → confirm → apply`.
 4. **Confirm**: `Y/n` prompt (defaults to yes).
 5. **Apply** (`apply_fork`): per editor — copy settings (backing up existing
    to `settings.json.bak`), install only *missing* extensions.
+
+Beyond apply/revert there are **release-driven actions** (`-i` install,
+`-u` update, `-rm` uninstall, `-l` list-versions) powered by the
+`version.*`/`release.*` modules and `releases.json`, and a **dashboard**
+(no flags) that wraps apply/reset/install/update/uninstall behind an
+interactive picker. Keep both ports in lockstep for these too.
 
 ### Platform handling
 
@@ -72,7 +91,8 @@ Every subprocess that doesn't need stdin (`code --version`,
 the root cause of the confirm-prompt bug (interactive runs exited 1 when a
 piped editor CLI ate the buffered answer). Keep this discipline for new
 subprocess calls. The PowerShell port has the same concern: native CLI calls
-get `$null |` piped in to close stdin, and prompts read via `[Console]::In`.
+get `$null |` piped in to close stdin, and prompts read via `[Console]::In`
+(read-lines return `$null` on EOF, mirroring bash `read || ans=n`).
 
 `FORK_DIR` maps fork → config dir name (`Code`, `VSCodium`).
 
@@ -88,36 +108,45 @@ Per selected editor: restore `settings.json.bak` → `settings.json` (or delete
 # Linux (no git, no cache — curl-fetches latest + runs from a temp dir)
 curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.sh -o syncode-install.sh && bash syncode-install.sh
 
-bash src/linux/syncode.sh   # apply (interactive selection when >1 editor)
-bash src/linux/syncode.sh -d   # dry-run: plan only, changes nothing — safe to run anywhere
-bash src/linux/syncode.sh -r   # revert to factory defaults
-bash src/linux/syncode.sh -r -d  # revert plan only
-bash src/linux/syncode.sh -h | -v  # help / version
+bash linux/syncode.sh   # apply (interactive selection when >1 editor)
+bash linux/syncode.sh -d   # dry-run: plan only, changes nothing — safe to run anywhere
+bash linux/syncode.sh -r   # revert to factory defaults
+bash linux/syncode.sh -r -d  # revert plan only
+bash linux/syncode.sh -l   # installed vs latest versions
+bash linux/syncode.sh -i   # install latest stable (code/codium; -i codium = one fork)
+bash linux/syncode.sh -u   # update installed editors
+bash linux/syncode.sh -rm  # uninstall editors + config dirs
+bash linux/syncode.sh -h | -v  # help / version
 ```
 
 ```powershell
 # Windows (irm fetches latest + runs from a temp dir)
 irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile install.ps1; .\install.ps1
 
-.\src\windows\syncode.ps1    # apply (interactive selection when >1 editor)
-.\src\windows\syncode.ps1 -d # dry-run: plan only, changes nothing
-.\src\windows\syncode.ps1 -r # revert to factory defaults
-.\src\windows\syncode.ps1 -r -d  # revert plan only
-.\src\windows\syncode.ps1 -h | -v  # help / version
+.\windows\syncode.ps1    # apply (interactive selection when >1 editor)
+.\windows\syncode.ps1 -d # dry-run: plan only, changes nothing
+.\windows\syncode.ps1 -r # revert to factory defaults
+.\windows\syncode.ps1 -r -d  # revert plan only
+.\windows\syncode.ps1 -l # installed vs latest versions
+.\windows\syncode.ps1 -i # install latest stable (code/codium; -i codium = one fork)
+.\windows\syncode.ps1 -u # update installed editors
+.\windows\syncode.ps1 -rm # uninstall editors + config dirs
+.\windows\syncode.ps1 -h | -v  # help / version
 ```
 
 `install.sh`/`install.ps1` pass flags through to the tool (e.g. `-d` for a
 dry-run). The tools resolve `settings.json`/`extensions.json` beside the
-script (install temp dir) or from `../shared` (checkout).
+script (install temp dir) or via `../shared` (repo checkout).
 
 **Testing / verification without touching a real machine:**
 
-- Linux: `bash -n src/linux/syncode.sh` — syntax check;
-  `bash src/linux/syncode.sh -d` — dry run.
-- Windows: run `src/windows/syncode.ps1 -d` in pwsh;
-  `powershell.exe -File src/windows/syncode.ps1 -d` for the 5.1 path. Parse
-  check: `[System.Management.Automation.Language.Parser]::ParseFile('src/windows/syncode.ps1',[ref]$null,[ref]$err)`.
-- `shellcheck src/linux/syncode.sh` if available (not a repo dependency).
+- Linux: `bash -n linux/syncode.sh` — syntax check;
+  `bash linux/syncode.sh -d` — dry run.
+  `bash linux/release.sh` runs the release module self-check (no network).
+- Windows: run `windows/syncode.ps1 -d` in pwsh;
+  `powershell.exe -File windows/syncode.ps1 -d` for the 5.1 path. Parse
+  check: `[System.Management.Automation.Language.Parser]::ParseFile('windows/syncode.ps1',[ref]$null,[ref]$err)`.
+- `shellcheck linux/syncode.sh` if available (not a repo dependency).
 - ⚠️ Running without `-d` **writes to real editor config dirs** and can
   overwrite `settings.json` (backed up first). Never run it in
   automated/CI contexts or against machines you don't own unless asked.
