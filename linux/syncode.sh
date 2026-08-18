@@ -85,7 +85,7 @@ WHAT IT DOES:
     then for each: backs up settings.json, copies the repo settings, and
     installs missing extensions. Shows a toggle menu when multiple editors
     are detected. With no flags, opens the interactive dashboard
-    (pick editor, then install/config/reset/uninstall/help).
+    (pick editor, then install/config/reset/uninstall).
 
 EXAMPLES:
     bash $SCRIPT_NAME           apply to selected editors (menu)
@@ -626,17 +626,8 @@ uninstall_editor() {
   invalidate_latest "$fork"
 }
 
-# show_action_help - shared help text offered by the Help option in every menu.
-show_action_help() {
-  echo "install    install latest stable if not installed"
-  echo "settings   copy settings.json (backup .bak) to the editor"
-  echo "extensions pick which extensions to install/uninstall"
-  echo 'reset      restore factory defaults  (type "reset" to confirm)'
-  echo 'uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
-}
-
 # pick_extensions <fork> - multiselect extension manager: toggle with numbers,
-# a=all, n=none, i=install selected, u=uninstall selected, h=help, m=back to
+# a=all, n=none, i=install selected, u=uninstall selected, m=back to
 # the config menu, q=quit. Only toggle state lives here; i/u run the CLI.
 # Feedback goes to DASH_NOTICE so the repainted frame keeps showing it.
 pick_extensions() {
@@ -658,7 +649,7 @@ pick_extensions() {
       printf '%d. [%s] %s\n' "$((id + 1))" "$mark" "${ids[$id]}"
     done
     echo "a. All  n. None  i. Install selected  u. Uninstall selected"
-    echo "h. Help  m. Menu  q. Quit"
+    echo "m. Menu  q. Quit"
     echo ""
     read -r -p "Enter an option: " line || line="q"
     line="${line%$'\r'}"
@@ -715,9 +706,6 @@ pick_extensions() {
         DASH_NOTICE="${out%$'\n'}"
         invalidate_exts "$fork"
         ;;
-      h|H)
-        DASH_NOTICE="$(show_action_help)"
-        ;;
       m|M)
         return
         ;;
@@ -730,8 +718,8 @@ pick_extensions() {
 }
 
 # run_dashboard - interactive hub: pick editor, pick action, loop. Numbered
-# menus; every menu offers Help + Quit, non-first menus add Menu (back to the
-# editor picker). The editor's full name is shown above the action menu.
+# menus; every menu offers Quit, non-first menus add Menu (back to the
+# editor picker). The editor's full name is folded into the menu prompt.
 # Each loop iteration repaints the full frame (banner + table + notice + menu).
 run_dashboard() {
   local line editor action
@@ -743,16 +731,14 @@ run_dashboard() {
       echo ""
       echo "1. Visual Studio Code"
       echo "2. VSCodium"
-      echo "3. Help"
-      echo "4. Quit"
+      echo "3. Quit"
       echo ""
       read -r -p "Enter an option: " line || line="q"
       line="${line%$'\r'}"
       case "$line" in
-        q|Q|4) echo "bye."; exit 0 ;;
+        q|Q|3) echo "bye."; exit 0 ;;
         code|1) editor="code"; break ;;
         codium|2) editor="codium"; break ;;
-        3) DASH_NOTICE="$(show_action_help)" ;;
         *) DASH_NOTICE="invalid: $line" ;;
       esac
     done
@@ -760,7 +746,7 @@ run_dashboard() {
       local opts=()
       opts+=(Install)
       if [[ -n "$(get_installed_version "$editor")" ]]; then opts+=(Config); fi
-      opts+=(Reset Uninstall Help Menu Quit)
+      opts+=(Reset Uninstall Menu Quit)
       redraw_frame "$DASH_NOTICE"
       echo "Pick an option for ${FORK_FULL[$editor]}:"
       echo ""
@@ -787,7 +773,6 @@ run_dashboard() {
         config) action="config"; break ;;
         reset) action="reset"; break ;;
         uninstall) action="uninstall"; break ;;
-        help) DASH_NOTICE="$(show_action_help)" ;;
         menu) continue 2 ;;
         quit|q) echo "bye."; exit 0 ;;
         *) DASH_NOTICE="invalid: $action" ;;
@@ -801,18 +786,16 @@ run_dashboard() {
           echo ""
           echo "1. Settings"
           echo "2. Extensions"
-          echo "3. Help"
-          echo "4. Menu"
-          echo "5. Quit"
+          echo "3. Menu"
+          echo "4. Quit"
           echo ""
           read -r -p "Enter an option: " line || line="q"
           line="${line%$'\r'}"
           case "$line" in
             1) apply_fork "$editor" settings || true ;;
             2) pick_extensions "$editor" ;;
-            3) DASH_NOTICE="$(show_action_help)" ;;
-            4) continue 2 ;;
-            5|q|Q) echo "bye."; exit 0 ;;
+            3) continue 2 ;;
+            4|q|Q) echo "bye."; exit 0 ;;
             *) DASH_NOTICE="invalid: $line" ;;
           esac
         done

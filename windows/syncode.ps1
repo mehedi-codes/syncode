@@ -584,17 +584,8 @@ function Select-InstallVariant($fork) {
     }
 }
 
-# Show-ActionHelp - shared help text offered by the Help option in every menu.
-function Show-ActionHelp {
-    Write-Output "install    install latest stable if not installed"
-    Write-Output "settings   copy settings.json (backup .bak) to the editor"
-    Write-Output "extensions pick which extensions to install/uninstall"
-    Write-Output 'reset      restore factory defaults  (type "reset" to confirm)'
-    Write-Output 'uninstall  remove editor and its config dir  (type "uninstall" to confirm)'
-}
-
 # Pick-Extensions <fork> - multiselect extension manager: toggle with numbers,
-# a=all, n=none, i=install selected, u=uninstall selected, h=help, m=back to
+# a=all, n=none, i=install selected, u=uninstall selected, m=back to
 # the config menu, q=quit. Only toggle state lives here; i/u run the CLI.
 # Feedback goes to $script:Notice so the repainted frame keeps showing it.
 function Pick-Extensions($fork) {
@@ -611,7 +602,7 @@ function Pick-Extensions($fork) {
             Write-Output ("{0}. [{1}] {2}" -f ($i + 1), $mark, $ids[$i])
         }
         Write-Output "a. All  n. None  i. Install selected  u. Uninstall selected"
-        Write-Output "h. Help  m. Menu  q. Quit"
+        Write-Output "m. Menu  q. Quit"
         Write-Output ""
         $line = Read-Line "Enter an option: "
         if ($null -eq $line) { Write-Output "bye."; exit 0 }
@@ -663,7 +654,6 @@ function Pick-Extensions($fork) {
                 $script:Notice = $out -join "`n"
                 Reset-ExtCache $fork
             }
-            "h" { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue extpick }
             "m" { return }
             "q" { Write-Output "bye."; exit 0 }
             default { $script:Notice = "invalid: $line" }
@@ -672,8 +662,8 @@ function Pick-Extensions($fork) {
 }
 
 # Run-Dashboard - interactive hub: pick editor, pick action, loop. Numbered
-# menus; every menu offers Help + Quit, non-first menus add Menu (back to the
-# editor picker). The editor's full name is shown above the action menu.
+# menus; every menu offers Quit, non-first menus add Menu (back to the
+# editor picker). The editor's full name is folded into the menu prompt.
 # Each loop iteration repaints the full frame (banner + table + notice + menu).
 function Run-Dashboard {
     $script:Notice = ""
@@ -685,8 +675,7 @@ function Run-Dashboard {
             Write-Output ""
             Write-Output "1. Visual Studio Code"
             Write-Output "2. VSCodium"
-            Write-Output "3. Help"
-            Write-Output "4. Quit"
+            Write-Output "3. Quit"
             Write-Output ""
             $line = Read-Line "Enter an option: "
             if ($null -eq $line) { Write-Output "bye."; exit 0 }
@@ -694,8 +683,7 @@ function Run-Dashboard {
             switch ($line) {
                 "1"      { $editor = "code"; break editorpick }
                 "2"      { $editor = "codium"; break editorpick }
-                "3"      { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue editorpick }
-                "4"      { Write-Output "bye."; exit 0 }
+                "3"      { Write-Output "bye."; exit 0 }
                 "q"      { Write-Output "bye."; exit 0 }
                 "Q"      { Write-Output "bye."; exit 0 }
                 "code"   { $editor = "code"; break editorpick }
@@ -709,7 +697,7 @@ function Run-Dashboard {
             $opts = @()
             $opts += ,@("Install", "install")
             if (Get-InstalledVersion $editor) { $opts += ,@("Config", "config") }
-            $opts += @("Reset", "reset"), @("Uninstall", "uninstall"), @("Help", "help"), @("Menu", "menu"), @("Quit", "quit")
+            $opts += @("Reset", "reset"), @("Uninstall", "uninstall"), @("Menu", "menu"), @("Quit", "quit")
             Show-Frame $script:Notice
             Write-Output "Pick an option for $($FORK_FULL[$editor]):"
             Write-Output ""
@@ -732,7 +720,6 @@ function Run-Dashboard {
                 "config"    { $action = "config"; break actionpick }
                 "reset"     { $action = "reset"; break actionpick }
                 "uninstall" { $action = "uninstall"; break actionpick }
-                "help"      { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue actionpick }
                 "menu"      { continue main }
                 "quit"      { Write-Output "bye."; exit 0 }
                 "q"         { Write-Output "bye."; exit 0 }
@@ -747,9 +734,8 @@ function Run-Dashboard {
                     Write-Output ""
                     Write-Output "1. Settings"
                     Write-Output "2. Extensions"
-                    Write-Output "3. Help"
-                    Write-Output "4. Menu"
-                    Write-Output "5. Quit"
+                    Write-Output "3. Menu"
+                    Write-Output "4. Quit"
                     Write-Output ""
                     $line = Read-Line "Enter an option: "
                     if ($null -eq $line) { Write-Output "bye."; exit 0 }
@@ -761,9 +747,8 @@ function Run-Dashboard {
                             continue configpick
                         }
                         "2" { Pick-Extensions $editor; continue configpick }
-                        "3" { $script:Notice = (Show-ActionHelp | Out-String).TrimEnd(); continue configpick }
-                        "4" { continue main }
-                        "5" { Write-Output "bye."; exit 0 }
+                        "3" { continue main }
+                        "4" { Write-Output "bye."; exit 0 }
                         "q" { Write-Output "bye."; exit 0 }
                         "Q" { Write-Output "bye."; exit 0 }
                         default { $script:Notice = "invalid: $line"; continue configpick }
