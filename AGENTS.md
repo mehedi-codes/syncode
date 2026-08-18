@@ -147,9 +147,10 @@ script (install temp dir) or via `../shared` (repo checkout).
 - CI (`.github/workflows/ci.yml`) runs on every push/PR: bash syntax check,
   sandboxed `-d` dry-runs for both config layouts (checkout `../shared` and
   flattened install), PowerShell parse checks on pwsh 7 + 5.1, ASCII-only
-  ps1 check (5.1 misreads non-ASCII as ANSI — a real regression source),
-  `extensions.md` coverage of every `extensions.json` ID, and bash/ps1
-  version lockstep.
+  source check across all tool scripts (5.1 misreads non-ASCII ps1 as ANSI —
+  a real regression source; bash must stay ASCII too so the ports' output
+  stays byte-identical), `extensions.md` coverage of every `extensions.json`
+  ID, and bash/ps1 version lockstep.
 - Locally: Linux — `bash -n linux/syncode.sh`; `bash linux/syncode.sh -d`.
   `bash linux/release.sh` runs the release module self-check (no network).
 - Windows: `windows/syncode.ps1 -d` in pwsh;
