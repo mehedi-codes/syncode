@@ -9,8 +9,6 @@
 :......::::::..:::::..::::..:::......::::.......:::........:::........::
 ```
 
-# syncode
-
 > Sync and manage your VS Code and VSCodium editors.
 
 **syncode** keeps your VS Code-style editors in sync from one command. It
