@@ -21,36 +21,45 @@ function Compare-Version($a, $b) {
     return 0
 }
 
+$script:InstalledCache = @{}
+
 function Get-InstalledVersion($fork) {
+    if ($script:InstalledCache.ContainsKey($fork)) { return $script:InstalledCache[$fork] }
+    $v = ""
     # CLI on PATH first
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
     if ($cli) {
         $v = $null | & $cli.Source --version 2>$null | Select-Object -First 1
-        if ($v) { return $v.Trim() }
+        if ($v) { $v = $v.Trim() } else { $v = "" }
     }
     # else resources/app/package.json from known install paths (regex, like the bash port)
-    $paths = @{
-        code   = @(
-            (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code"),
-            (Join-Path ${env:ProgramFiles(x86)} "Microsoft VS Code"),
-            (Join-Path $env:ProgramFiles "Microsoft VS Code")
-        )
-        codium = @(
-            (Join-Path $env:LOCALAPPDATA "Programs\VSCodium"),
-            (Join-Path ${env:ProgramFiles(x86)} "VSCodium"),
-            (Join-Path $env:ProgramFiles "VSCodium")
-        )
-    }
-    foreach ($p in $paths[$fork]) {
-        $pj = Join-Path $p "resources\app\package.json"
-        if (Test-Path $pj) {
-            $text = [IO.File]::ReadAllText($pj, [Text.Encoding]::UTF8)
-            $m = [regex]::Match($text, '"version"\s*:\s*"([^"]+)"')
-            if ($m.Success) { return $m.Groups[1].Value }
+    if (-not $v) {
+        $paths = @{
+            code   = @(
+                (Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code"),
+                (Join-Path ${env:ProgramFiles(x86)} "Microsoft VS Code"),
+                (Join-Path $env:ProgramFiles "Microsoft VS Code")
+            )
+            codium = @(
+                (Join-Path $env:LOCALAPPDATA "Programs\VSCodium"),
+                (Join-Path ${env:ProgramFiles(x86)} "VSCodium"),
+                (Join-Path $env:ProgramFiles "VSCodium")
+            )
+        }
+        foreach ($p in $paths[$fork]) {
+            $pj = Join-Path $p "resources\app\package.json"
+            if (Test-Path $pj) {
+                $text = [IO.File]::ReadAllText($pj, [Text.Encoding]::UTF8)
+                $m = [regex]::Match($text, '"version"\s*:\s*"([^"]+)"')
+                if ($m.Success) { $v = $m.Groups[1].Value; break }
+            }
         }
     }
-    return ""
+    $script:InstalledCache[$fork] = $v
+    return $v
 }
+
+function Reset-InstalledCache($fork) { $script:InstalledCache.Remove($fork) | Out-Null }
 
 # ------------------------------------------------------------
 #  Self-check (runs only when executed directly, not dot-sourced)

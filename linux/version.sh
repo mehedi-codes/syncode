@@ -32,25 +32,37 @@ version_compare() {
 
 # get_installed_version <fork> -> echoes version or "" if not found.
 # CLI on PATH first; else resources/app/package.json from known install paths.
+# Cached per session (version can't change while the tool runs); invalidated by
+# invalidate_installed after install/uninstall.
+declare -A INSTALLED_CACHE=()
+
 get_installed_version() {
   local fork="$1" v p
+  if [[ "${INSTALLED_CACHE[$fork]+set}" == set ]]; then
+    printf '%s' "${INSTALLED_CACHE[$fork]}"
+    return
+  fi
+  v=""
   if command -v "$fork" >/dev/null 2>&1; then
     v="$(command "$fork" --version 2>/dev/null | head -n1)" || true
-    if [[ -n "$v" ]]; then echo "$v"; return; fi
   fi
-  case "$fork" in
-    code)   p="/usr/share/code";;
-    codium) p="/usr/share/codium"
-            [[ -d "$HOME/.local/share/VSCodium" ]] && p="$HOME/.local/share/VSCodium";;
-    *) return;;
-  esac
-  if [[ -f "$p/resources/app/package.json" ]]; then
-    v="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-          "$p/resources/app/package.json" | head -n1)"
-    if [[ -n "$v" ]]; then echo "$v"; return; fi
+  if [[ -z "$v" ]]; then
+    case "$fork" in
+      code)   p="/usr/share/code";;
+      codium) p="/usr/share/codium"
+              [[ -d "$HOME/.local/share/VSCodium" ]] && p="$HOME/.local/share/VSCodium";;
+      *) return;;
+    esac
+    if [[ -f "$p/resources/app/package.json" ]]; then
+      v="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+            "$p/resources/app/package.json" | head -n1)"
+    fi
   fi
-  echo ""
+  INSTALLED_CACHE[$fork]="$v"
+  printf '%s' "$v"
 }
+
+invalidate_installed() { unset "INSTALLED_CACHE[$1]"; }
 
 # ------------------------------------------------------------
 #  Self-check (runs only when executed directly, not sourced)
