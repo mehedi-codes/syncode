@@ -45,12 +45,11 @@ curl -fsSL https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.s
 **Windows** (PowerShell; needs no curl — uses `Invoke-RestMethod`):
 
 ```powershell
-$p = Join-Path $env:TEMP "syncode-install.ps1"; irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile $p; & $p
+$p="$env:temp\s.ps1";irm https://raw.githubusercontent.com/mehedi-codes/syncode/main/install.ps1 -OutFile $p;& $p
 ```
 
 Flags pass through to the runner (`-d`, `-r`, `-v`, `-h`, `-i`, `-u`, `-rm`),
 e.g. append `-d` to the Windows one-liner (`...; & $p -d`) for a dry-run.
-
 Prefer cloning? The repo runs directly too — see [Usage](#usage).
 
 ## Usage
