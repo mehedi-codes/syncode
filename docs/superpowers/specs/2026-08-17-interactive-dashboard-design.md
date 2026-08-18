@@ -41,7 +41,7 @@ in both ports). No input ever crashes the loop.
 | Install missing editor(s) | `-i` | `--install [fork]` |
 | Update installed editor(s) | `-u` | `--update [fork]` |
 | Uninstall editor(s) | `-rm` | `--uninstall [fork]` |
-| Show installed vs latest | `-V` | `--list-versions` |
+| Show installed vs latest | `-l` | `--list-versions` |
 
 - `-d`/`--dry-run` composes with all flags: print plan table, change nothing.
 - Existing `-r`/`--revert` (flag path for reset) stays.
@@ -57,6 +57,10 @@ One row per editor, 4 columns:
 | --- | --- | --- | --- | --- |
 | code | 1.133.0 | 1.133.0 | ✓ synced | ✓ up to date |
 | codium | — | 1.126.04524 | — | — |
+
+`latest` for codium is its own release channel (tracks upstream 1.126), NOT
+VS Code's 1.133.x — codium will never "catch up" to code's number; the gap
+is by design, not a broken update.
 
 - `installed`: version from `Get-InstalledVersion` (CLI first, `package.json`
   fallback), or `—` if no editor detected (no CLI, no install path, no config
@@ -111,6 +115,10 @@ update action aborts with `[ERROR] can't check for updates (network
 unavailable)` — it never attempts a blind upgrade. `unknown` is a display
 value, not a "try anyway" signal.
 
+If the codium lookup returns HTTP 403 with `X-RateLimit-Remaining: 0`,
+report `[ERROR] GitHub API rate limit hit` — distinct from offline. The
+per-session cache keeps real usage far under the 60/hr unauth limit.
+
 ## Release channels
 
 ### VS Code (`code`)
@@ -127,9 +135,12 @@ value, not a "try anyway" signal.
 | Latest version | `https://api.github.com/repos/VSCodium/vscodium/releases/latest` | `tag_name` |
 | Installer URL | `https://github.com/VSCodium/vscodium/releases/download/<tag>/<asset>` | direct asset |
 
-Verified 2026-08-17: VS Code latest 1.133.0; VSCodium latest 1.126.04524.
-winget is NOT used for install/update (it lags: code 1.132.0 vs 1.133.0);
-winget is uninstall fallback only.
+Verified 2026-08-17: VS Code latest 1.133.0; VSCodium latest 1.126.04524
+(= upstream VS Code 1.126.0 + build 4524; VSCodium trails upstream by design).
+winget is NOT used for install/update; winget is uninstall fallback only.
+(Lag note: `Microsoft.VisualStudioCode` winget = 1.132.0 vs 1.133.0 real;
+`VSCodium.VSCodium` winget is current at 1.126.04524 — the direct GitHub
+asset is still preferred for codium.)
 
 ## releases.json (shared data)
 
@@ -201,6 +212,7 @@ Comparator algorithm (same in both ports):
 3. If equal so far, the longer version wins (more segments = newer).
 4. Returns `-1` (a < b) / `0` (equal) / `1` (a > b).
    `1.10.0` > `1.9.0` (integer segments, not string sort).
+- Versions are only ever compared within the same fork — never code vs codium.
 - Detect/plan/apply stay in the entry script (not churning cold code).
 
 ## Version detection
@@ -234,6 +246,7 @@ PATH-independent).
   (install/update/uninstall/list-versions). Plain apply (config/reset) keeps
   working without the file.
 - Network failure on latest lookup: dashboard shows `unknown`, menu still works.
+  (Codium only: HTTP 403 + rate-limit header → `rate limited`, not `unknown`.)
 - Network failure on actual install/update: `[ERROR]` + exit 1, nothing mutated.
 - No package manager (Linux): fall back to tarball install.
 - `--install` on already-installed fork: report "already installed", skip.
@@ -254,4 +267,5 @@ PATH-independent).
 - macOS (syncode.sh Linux-only, syncode.ps1 Windows-only by design).
 - Editors beyond code + codium.
 - Architecture variants (x64 only).
-- Winget as install/update path (stale; uninstall fallback only).
+- Winget as install/update path (code lags in winget; codium winget is current
+  but the direct GitHub asset is preferred); uninstall fallback only.

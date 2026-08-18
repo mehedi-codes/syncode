@@ -19,7 +19,7 @@ Applied identically in both ports:
 | Install missing editor(s) | `-i` | `--install [fork]` |
 | Update installed editor(s) | `-u` | `--update [fork]` |
 | Uninstall editor(s) | `-rm` | `--uninstall [fork]` |
-| Show installed vs latest | `-V` | `--list-versions` |
+| Show installed vs latest | `-l` | `--list-versions` |
 
 - No fork arg = applies to all forks (install/update only the applicable ones).
 - `-d`/`--dry-run` composes with all new flags: print the plan table, change
@@ -56,10 +56,14 @@ Linux `codium_<tag>_amd64.deb`, `codium-<tag>-el8.x86_64.rpm`,
 
 1. Print plan table: `name / installed / latest / action`.
 2. Confirm (`Y/n`).
-3. Download installer to temp dir.
+3. Download installer to a syncode-generated temp file name (never the
+   source filename — the deb carries a build timestamp, e.g.
+   `code_1.133.0-1786487972_amd64.deb`). Never parse a version from it.
 4. Silent install:
-   - Windows (both forks): Inno installer `/VERYSILENT /NORESTART`
-     (VS Code user setup, VSCodium user setup).
+   - Windows (both forks): Inno installer `/VERYSILENT /NORESTART
+     /mergetasks=!runcode` (VS Code user setup, VSCodium user setup).
+     Without `/mergetasks=!runcode` the installer relaunches the editor
+     after install, breaking the dashboard loop.
    - Linux: detect package manager — `apt` → `sudo apt install ./<file>.deb`,
      `dnf`/`yum` → `sudo dnf install ./<file>.rpm`; fallback tarball →
      extract to `~/.local/share/<Code|VSCodium>`.
