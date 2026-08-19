@@ -4,18 +4,6 @@
 #  (no git, no cache) and runs it immediately from a temp dir.
 #  Version: 1.3.0
 # ============================================================
-param(
-    [Alias('h')][switch]$Help,
-    [Alias('v')][switch]$Version,
-    [Alias('d')][switch]$DryRun,
-    [Alias('r')][switch]$Revert,
-    [Alias('i')][switch]$Install,
-    [Alias('u')][switch]$Uninstall,
-    [Alias('l')][switch]$ListVersions,
-    # optional fork name after -i/-u, passed through to syncode.ps1
-    [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
-)
-
 $ErrorActionPreference = "Stop"
 
 $REPO_RAW = "https://raw.githubusercontent.com/mehedi-codes/syncode/main"
@@ -40,18 +28,7 @@ try {
         Invoke-WebRequest -Uri "$REPO_RAW/$($f.Src)" -OutFile (Join-Path $tmp $f.Dst) -UseBasicParsing
     }
 
-    # pass flags through to syncode.ps1
-    $psb = @{}
-    if ($Help)        { $psb.Help = $true }
-    if ($Version)     { $psb.Version = $true }
-    if ($DryRun)      { $psb.DryRun = $true }
-    if ($Revert)      { $psb.Revert = $true }
-    if ($Install)     { $psb.Install = $true }
-    if ($Uninstall)   { $psb.Uninstall = $true }
-    if ($ListVersions){ $psb.ListVersions = $true }
-    if ($Rest.Count -gt 0) { $psb.Rest = $Rest }
-
-    & (Join-Path $tmp "syncode.ps1") @psb
+    & (Join-Path $tmp "syncode.ps1")
 }
 finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

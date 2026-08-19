@@ -52,72 +52,12 @@ log_warn()  { printf '[WARN ] %s\n' "$*" >&2; }
 log_error() { printf '[ERROR] %s\n' "$*" >&2; }
 
 # ------------------------------------------------------------
-#  Flags
+#  Runtime state
 # ------------------------------------------------------------
-DRY_RUN=false
 REVERT=false
 
-usage() {
-  cat <<EOF
-
-$BANNER
-
-$TOOL_NAME v$VERSION - $DESCRIPTION
-
-USAGE:
-    $SCRIPT_NAME [OPTIONS]
-
-OPTIONS:
-    -h, --help      show this help and exit
-    -v, --version   show version and exit
-    -d, --dry-run   show the plan, change nothing
-    -r, --revert    restore editors to factory defaults:
-                    settings.json.bak -> settings.json if it exists,
-                    else delete settings.json; uninstall $TOOL_NAME-installed
-                    extensions. With -d: applies to all detected editors;
-                    without -d: interactive selection like apply.
-    -i, --install [fork]    install latest stable (code/codium; default all)
-    -u, --uninstall [fork] remove editor and its config dir
-    -l, --list-versions    show installed vs latest versions, then exit
-
-WHAT IT DOES:
-    Detects installed editors (VSCode, VSCodium),
-    then for each: backs up settings.json, copies the repo settings, and
-    installs missing extensions. Shows a toggle menu when multiple editors
-    are detected. With no flags, opens the interactive dashboard
-    (pick editor, then install/config/reset/uninstall).
-
-EXAMPLES:
-    bash $SCRIPT_NAME           apply to selected editors (menu)
-    bash $SCRIPT_NAME           interactive dashboard (no flags)
-    bash $SCRIPT_NAME -d        preview the plan, change nothing
-    bash $SCRIPT_NAME -r        restore editors to factory defaults
-    bash $SCRIPT_NAME -l        show installed vs latest versions
-    bash $SCRIPT_NAME -i codium install latest VSCodium
-EOF
-  exit "${1:-0}"
-}
-
-ACTION=""
-ACTION_FORK=""
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -h|--help)   usage 0 ;;
-    -v|--version) printf '%s v%s\n' "$TOOL_NAME" "$VERSION"; exit 0 ;;
-    -d|--dry-run) DRY_RUN=true; shift ;;
-    -r|--revert) REVERT=true; shift ;;
-    -i|--install) ACTION=install; shift
-      [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
-    -u|--uninstall) ACTION=uninstall; shift
-      [[ $# -gt 0 && "$1" != -* ]] && { ACTION_FORK="$1"; shift; } ;;
-    -l|--list-versions) ACTION=list-versions; shift ;;
-    *)
-      log_error "unknown option: $1"
-      usage 1
-      ;;
-  esac
-done
+# syncode takes no arguments - the interactive dashboard is the whole tool.
+[[ $# -gt 0 ]] && { log_error "syncode takes no arguments"; exit 1; }
 
 # ------------------------------------------------------------
 #  Banner
@@ -154,6 +94,8 @@ declare -A FORK_FULL=(
   [code]="VSCode"
   [codium]="VSCodium"
 )
+
+check=$'\u2713'
 
 settings_path() { printf '%s/%s/User/settings.json\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
 backup_path()   { printf '%s/%s/User/settings.json.bak\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
@@ -399,18 +341,6 @@ resolve_cli() {
   return 0
 }
 
-# show_list_versions - -l / --list-versions table
-show_list_versions() {
-  echo ""
-  printf '%-10s %-12s %s\n' name installed latest
-  local f inst
-  for f in "${FORK_ORDER[@]}"; do
-    inst="$(get_installed_version "$f")"
-    [[ -z "$inst" ]] && inst="-"
-    printf '%-10s %-12s %s\n' "$f" "$inst" "$(latest_for "$f")"
-  done
-}
-
 # render_dashboard - one row per fork: name / installed / latest / settings /
 # extensions, drawn as a boxed grid. Column width = longest cell (header or
 # value) + 2 padding so nothing ever overflows; ASCII-only box (PS 5.1 can't
@@ -612,7 +542,7 @@ install_editor() {
       || { log_error "$fork: extract failed"; rm -f "$HOME/.cache/syncode-${fork}.tar.gz"; return 1; }
     rm -f "$HOME/.cache/syncode-${fork}.tar.gz"
   fi
-  echo "$fork installed"
+  echo "$check ${FORK_FULL[$fork]} installed successfully."
   invalidate_installed "$fork"
   invalidate_exts "$fork"
   invalidate_latest "$fork"
@@ -651,8 +581,7 @@ pick_extensions() {
   fi
   while true; do
     redraw_frame "$DASH_NOTICE"
-    echo "${FORK_FULL[$fork]} extensions"
-    echo "Pick an option:"
+    echo "Pick extensions for ${FORK_FULL[$fork]}:"
     echo ""
     for id in "${!ids[@]}"; do
       local mark=" "
@@ -738,7 +667,7 @@ run_dashboard() {
     editor=""
     while true; do
       redraw_frame "$DASH_NOTICE"
-      echo "Pick an option:"
+      echo "Pick an editor:"
       echo ""
       echo "1. VSCode"
       echo "2. VSCodium"
@@ -791,14 +720,14 @@ run_dashboard() {
             DASH_NOTICE="Installing ${FORK_FULL[$editor]}..."
             redraw_frame "$DASH_NOTICE"
             install_editor "$editor" || true
-            DASH_NOTICE="$editor installed"
+            DASH_NOTICE="$check ${FORK_FULL[$editor]} installed successfully."
           fi
           continue
           ;;
         config)
           while true; do
             redraw_frame "$DASH_NOTICE"
-            echo "Pick an option for ${FORK_FULL[$editor]}:"
+            echo "Pick a config for ${FORK_FULL[$editor]}:"
             echo ""
             echo "1. Settings"
             echo "2. Extensions"
@@ -808,7 +737,12 @@ run_dashboard() {
             read -r -p "Enter an option: " line || line="q"
             line="${line%$'\r'}"
             case "$line" in
-              1) apply_fork "$editor" settings || true ;;
+              1)
+                DASH_NOTICE="Applying ${FORK_FULL[$editor]}..."
+                redraw_frame "$DASH_NOTICE"
+                apply_fork "$editor" settings || true
+                DASH_NOTICE="$editor settings applied"
+                ;;
               2) pick_extensions "$editor" ;;
               3) continue 3 ;;
               4|q|Q) echo "bye."; exit 0 ;;
@@ -817,9 +751,12 @@ run_dashboard() {
           done
           ;;
         reset)
+          redraw_frame ""
           read -r -p 'Type "reset" to confirm: ' line || line=""
           line="${line%$'\r'}"
           if [[ "$line" == "reset" ]]; then
+            DASH_NOTICE="Resetting ${FORK_FULL[$editor]}..."
+            redraw_frame "$DASH_NOTICE"
             REVERT=true; apply_fork "$editor" || true; REVERT=false
             DASH_NOTICE="$editor reset to factory defaults"
           else
@@ -828,6 +765,7 @@ run_dashboard() {
           continue
           ;;
         uninstall)
+          redraw_frame ""
           read -r -p 'Type "uninstall" to confirm: ' line || line=""
           line="${line%$'\r'}"
           if [[ "$line" == "uninstall" ]]; then
@@ -854,158 +792,7 @@ run_dashboard() {
 detect_forks
 DASH_NOTICE=""
 
-# action flags take priority (list-versions / install / uninstall)
-if [[ -n "$ACTION" ]]; then
-  banner
-  local_action_forks=("${FORK_ORDER[@]}")
-  if [[ -n "$ACTION_FORK" ]]; then
-    case "$ACTION_FORK" in
-      code|codium) local_action_forks=("$ACTION_FORK") ;;
-      *) log_error "unknown fork: $ACTION_FORK"; exit 1 ;;
-    esac
-  fi
-  if [[ "$ACTION" == "list-versions" ]]; then
-    show_list_versions
-    exit 0
-  fi
-  if [[ "$DRY_RUN" == true ]]; then
-    echo ""
-    printf '%-10s %-12s %-12s %s\n' name installed latest action
-    f=""; inst=""; latest=""; desc=""
-    for f in "${local_action_forks[@]}"; do
-      inst="$(get_installed_version "$f")"
-      [[ -z "$inst" ]] && inst="none"
-      latest="$(latest_for "$f")"
-      case "$ACTION" in
-        install)   desc="install $latest" ;;
-        uninstall) desc="remove editor + config" ;;
-      esac
-      printf '%-10s %-12s %-12s %s\n' "$f" "$inst" "$latest" "$desc"
-    done
-    echo "DRY RUN - nothing applied."
-    exit 0
-  fi
-  echo ""
-  read -r -p "Apply? [Y/n] " ans || ans="n"
-  ans="${ans%$'\r'}"
-  case "$ans" in
-    n|N) echo "aborted."; exit 0 ;;
-    *)   : ;;
-  esac
-  echo ""
-  for f in "${local_action_forks[@]}"; do
-    echo "$f:"
-    case "$ACTION" in
-      install)
-        if [[ -n "$(get_installed_version "$f")" ]]; then
-          echo "$f already installed"
-        else
-          install_editor "$f"
-        fi
-        ;;
-      uninstall) uninstall_editor "$f" ;;
-    esac
-    echo ""
-  done
-  exit 0
-fi
-
-# no flags -> interactive dashboard
-if [[ "$REVERT" == false && "$DRY_RUN" == false ]]; then
-  run_dashboard
-  exit 0
-fi
-
-# plan table
-banner
-echo "Plan:"
-if [[ "$REVERT" == true ]]; then
-  echo "mode: revert to factory defaults"
-fi
-printf '%-10s %-12s %s\n' "name" "version" "status"
-printf '%-10s %-12s %s\n' "----" "-------" "------"
-for f in "${FORK_ORDER[@]}"; do
-  if printf '%s\n' "${detected[@]}" | grep -qx "$f"; then
-    printf '%-10s %-12s %s\n' "$f" "$(editor_version "$f")" "$(plan_fork "$f")"
-  else
-    printf '%-10s %-12s %s\n' "$f" "n/a" "not installed"
-  fi
-done
-
-echo ""
-
-# selection (menu only when not dry-run and more than one fork)
-selected=("${detected[@]}")
-if [[ "$DRY_RUN" == false ]] && [[ "${#detected[@]}" -gt 1 ]]; then
-  declare -A checked=()
-  f=""
-  for f in "${detected[@]}"; do checked[$f]=1; done
-
-  while true; do
-    echo "Detected editors:"
-    i=1
-    for f in "${detected[@]}"; do
-      mark=" "
-      if [[ "${checked[$f]}" -eq 1 ]]; then
-        mark="x"
-      fi
-      printf '%d) [%s] %s\n' "$i" "$mark" "$f"
-      i=$((i + 1))
-    done
-    echo "a) select all     n) select none     <enter> = apply checked"
-    read -r -p "toggle (e.g. 1 3), a=all, n=none, enter=apply: " input
-    input="${input%$'\r'}"
-
-    case "$input" in
-      "") break ;;
-      a|A) for f in "${detected[@]}"; do checked[$f]=1; done ;;
-      n|N) for f in "${detected[@]}"; do checked[$f]=0; done ;;
-      *)
-        for num in $input; do
-          if [[ "$num" =~ ^[0-9]+$ ]] && [[ "$num" -ge 1 ]] && [[ "$num" -le "${#detected[@]}" ]]; then
-            f="${detected[$((num - 1))]}"
-            checked[$f]=$((1 - checked[$f]))
-          else
-            echo "invalid: $num"
-          fi
-        done
-        ;;
-    esac
-  done
-
-  selected=()
-  for f in "${detected[@]}"; do
-    if [[ "${checked[$f]}" -eq 1 ]]; then
-      selected+=("$f")
-    fi
-  done
-fi
-
-if [[ "$DRY_RUN" == true ]]; then
-  echo "DRY RUN - nothing applied."
-  exit 0
-fi
-
-if [[ "${#selected[@]}" -eq 0 ]]; then
-  echo "nothing to apply."
-  exit 0
-fi
-
-echo ""
-# confirm
-read -r -p "Apply? [Y/n] " ans || ans="n"
-ans="${ans%$'\r'}"
-case "$ans" in
-  n|N) echo "aborted."; exit 0 ;;
-  *)   : ;;
-esac
-
-# apply
-echo ""
-for f in "${selected[@]}"; do
-  echo "$f:"
-  apply_fork "$f"
-  echo ""
-done
-
-echo "done."
+# syncode takes no arguments - the interactive dashboard is the whole tool:
+# pick an editor, then install/config/reset/uninstall (install picks the
+# variant by package manager). run_dashboard loops until Quit.
+run_dashboard

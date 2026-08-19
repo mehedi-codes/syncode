@@ -12,7 +12,7 @@ bash -n linux/syncode.sh linux/version.sh linux/release.sh install.sh
 echo "== release module self-check (no network) =="
 bash linux/release.sh
 
-echo "== sandbox dry-run (checkout layout, ../shared configs) =="
+echo "== sandbox dashboard smoke test (checkout layout, ../shared configs) =="
 sandbox="$(mktemp -d)"
 trap 'rm -rf "$sandbox"' EXIT
 mkdir -p "$sandbox/bin" "$sandbox/home/.config/Code/User" "$sandbox/home/.config/VSCodium/User"
@@ -27,13 +27,13 @@ cp "$sandbox/bin/code" "$sandbox/bin/codium"
 chmod +x "$sandbox/bin/code" "$sandbox/bin/codium"
 cp shared/settings.json "$sandbox/home/.config/Code/User/settings.json"
 echo '{"workbench.colorTheme":"Not Synced"}' > "$sandbox/home/.config/VSCodium/User/settings.json"
-out="$(PATH="$sandbox/bin:$PATH" HOME="$sandbox/home" bash linux/syncode.sh -d)"
+out="$(printf 'q\n' | PATH="$sandbox/bin:$PATH" HOME="$sandbox/home" bash linux/syncode.sh)"
 echo "$out"
-grep -q "settings already in sync" <<< "$out"
-grep -q "copy settings (backup -> .bak)" <<< "$out"
-grep -q "DRY RUN" <<< "$out"
+grep -q "Pick an editor" <<< "$out"
+grep -q "VSCode" <<< "$out"
+grep -q "bye." <<< "$out"
 
-echo "== sandbox dry-run (flattened install layout, beside-script configs) =="
+echo "== sandbox dashboard smoke test (flattened install layout, beside-script configs) =="
 rm -rf "$sandbox"
 mkdir -p "$sandbox/bin" "$sandbox/home/.config/Code/User"
 cp linux/syncode.sh linux/version.sh linux/release.sh \
@@ -47,9 +47,9 @@ esac
 EOF
 cp "$sandbox/bin/code" "$sandbox/bin/codium"
 chmod +x "$sandbox/bin/code" "$sandbox/bin/codium"
-out="$(PATH="$sandbox/bin:$PATH" HOME="$sandbox/home" bash "$sandbox/syncode.sh" -d)"
+out="$(printf 'q\n' | PATH="$sandbox/bin:$PATH" HOME="$sandbox/home" bash "$sandbox/syncode.sh")"
 echo "$out"
-grep -q "DRY RUN" <<< "$out"
+grep -q "Pick an editor" <<< "$out"
 rm -rf "$sandbox"
 trap - EXIT
 

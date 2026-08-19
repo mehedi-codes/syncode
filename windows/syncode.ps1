@@ -3,19 +3,14 @@
 #  Windows / PowerShell version (Windows only).
 #  Version: 1.4.0
 # ============================================================
-param(
-    [Alias('h')][switch]$Help,
-    [Alias('v')][switch]$Version,
-    [Alias('d')][switch]$DryRun,
-    [Alias('r')][switch]$Revert,
-    [Alias('i')][switch]$Install,
-    [Alias('u')][switch]$Uninstall,
-    [Alias('l')][switch]$ListVersions,
-    # optional fork name after -i/-u, e.g. "-i codium" (bare -i = all forks)
-    [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
-)
-
 $ErrorActionPreference = "Stop"
+$Revert = $false
+
+# syncode takes no arguments - the interactive dashboard is the whole tool.
+if ($args.Count -gt 0) {
+    Write-Host "[ERROR] syncode takes no arguments" -ForegroundColor Red
+    exit 1
+}
 
 $VERSION_STR = "1.4.0"
 $TOOL_NAME = "syncode"
@@ -93,6 +88,7 @@ if (-not [Console]::IsOutputRedirected) {
 # Braille dot-ring spinner (U+2800 block). Built from codepoints so this file
 # stays pure ASCII (CI enforces ASCII ps1; 5.1 reads BOM-less UTF-8 as ANSI).
 $script:SpinnerFrames = -join (0x280B, 0x2819, 0x2839, 0x2838, 0x283C, 0x2834, 0x2826, 0x2827, 0x2807, 0x280F | ForEach-Object { [char]$_ })
+$script:Check = if ($script:CanUnicode) { [char]0x2713 } else { "[OK]" }
 
 # Write-ProgressLine <label> <name> <pct> <frame> - single \r line: spinner at
 # start, a solid white background block behind the centered temp filename, real
@@ -183,50 +179,6 @@ function Wait-ProcessSpinner($label, $p) {
     Write-ProgressLine $label "" -1 " "
     Write-Output ""
 }
-
-function Show-Usage {
-    Write-Output @"
-
-$BANNER
-
-$TOOL_NAME v$VERSION_STR - $DESCRIPTION
-
-USAGE:
-    .\$SCRIPT_NAME [OPTIONS]
-
-OPTIONS:
-    -h, --help      show this help and exit
-    -v, --version   show version and exit
-    -d, --dry-run   show the plan, change nothing
-    -r, --revert    restore editors to factory defaults:
-                    settings.json.bak -> settings.json if it exists,
-                    else delete settings.json; uninstall $TOOL_NAME-installed
-                    extensions. With -d: applies to all detected editors;
-                    without -d: interactive selection like apply.
-    -i, --install [fork]    install latest stable (code/codium; default all)
-    -u, --uninstall [fork] remove editor and its config dir
-    -l, --list-versions     show installed vs latest versions, then exit
-
-WHAT IT DOES:
-    Detects installed editors (VSCode, VSCodium),
-    then for each: backs up settings.json, copies the repo settings, and
-    installs missing extensions. Shows a toggle menu when multiple editors
-    are detected. With no flags, opens the interactive dashboard
-    (pick editor, then install/config/reset/uninstall/help).
-
-EXAMPLES:
-    .\$SCRIPT_NAME           apply to selected editors (menu)
-    .\$SCRIPT_NAME           interactive dashboard (no flags)
-    .\$SCRIPT_NAME -d        preview the plan, change nothing
-    .\$SCRIPT_NAME -r        restore editors to factory defaults
-    .\$SCRIPT_NAME -l        show installed vs latest versions
-    .\$SCRIPT_NAME -i codium install latest VSCodium
-"@
-    exit 0
-}
-
-if ($Help)    { Show-Usage }
-if ($Version) { Write-Output "$TOOL_NAME v$VERSION_STR"; exit 0 }
 
 # ------------------------------------------------------------
 #  OS / platform (Windows only: APPDATA is the config root)
@@ -421,17 +373,6 @@ function Resolve-Cli($fork) {
     return ""
 }
 
-# Show-ListVersions - -l / --list-versions table
-function Show-ListVersions {
-    Write-Output ""
-    "{0,-10} {1,-12} {2}" -f "name", "installed", "latest"
-    foreach ($f in $FORK_ORDER) {
-        $inst = Get-InstalledVersion $f
-        if (-not $inst) { $inst = "-" }
-        "{0,-10} {1,-12} {2}" -f $f, $inst, (Get-LatestCached $f)
-    }
-}
-
 # Show-Dashboard - one row per fork: name / installed / latest / settings / extensions
 function Show-Dashboard {
     # Boxed grid: column width = longest cell (header or value) + 2 padding so
@@ -538,7 +479,7 @@ function Install-Editor($fork, $variant = "win") {
     Wait-ProcessSpinner "  ${fork}: Installing $ver" $p
     Remove-Item -Force $tmp
     if ($p.ExitCode -ne 0) { throw "${fork}: installer failed (exit $($p.ExitCode))" }
-    Write-Output "$fork installed"
+    Write-Output "$script:Check $($FORK_FULL[$fork]) installed successfully."
     Reset-InstalledCache $fork
     Reset-ExtCache $fork
     Reset-LatestCache $fork
@@ -588,7 +529,7 @@ function Select-InstallVariant($fork) {
     $opts += ,@("System Installer", "winSystem")
     if ($fork -eq "codium") { $opts += ,@("Microsoft Software Installer", "winMsi") }
     $opts += @("Menu", "menu"), @("Quit", "quit")
-    Write-Host "Select a variant:"
+    Write-Host "Select an installer variant for $($FORK_FULL[$fork]):"
     Write-Host ""
     for ($i = 0; $i -lt $opts.Count; $i++) {
         Write-Host ("{0}. {1}" -f ($i + 1), $opts[$i][0])
@@ -622,8 +563,7 @@ function Pick-Extensions($fork) {
     $sel = @{}
     :extpick while ($true) {
         Show-Frame $script:Notice
-        Write-Output "$($FORK_FULL[$fork]) extensions"
-        Write-Output "Pick an option:"
+        Write-Output "Pick extensions for $($FORK_FULL[$fork]):"
         Write-Output ""
         for ($i = 0; $i -lt $ids.Count; $i++) {
             $mark = if ($sel[$ids[$i]]) { "x" } else { " " }
@@ -699,7 +639,7 @@ function Run-Dashboard {
         $editor = ""
         :editorpick while ($true) {
             Show-Frame $script:Notice
-            Write-Output "Pick an option:"
+            Write-Output "Pick an editor:"
             Write-Output ""
             Write-Output "1. VSCode"
             Write-Output "2. VSCodium"
@@ -761,7 +701,7 @@ function Run-Dashboard {
                         if ($variant -eq "quit") { Write-Output "bye."; exit 0 }
                         $script:Notice = "Installing $($FORK_FULL[$editor])..."
                         Show-Frame $script:Notice
-                        try { Install-Editor $editor $variant; $script:Notice = "$editor installed" }
+                        try { Install-Editor $editor $variant; $script:Notice = "$script:Check $($FORK_FULL[$editor]) installed successfully." }
                         catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
                     }
                     continue actionpick
@@ -769,7 +709,7 @@ function Run-Dashboard {
                 "config" {
                     :configpick while ($true) {
                         Show-Frame $script:Notice
-                        Write-Output "Pick an option for $($FORK_FULL[$editor]):"
+                        Write-Output "Pick a config for $($FORK_FULL[$editor]):"
                         Write-Output ""
                         Write-Output "1. Settings"
                         Write-Output "2. Extensions"
@@ -781,7 +721,9 @@ function Run-Dashboard {
                         $line = $line.Trim()
                         switch ($line) {
                             "1" {
-                                try { Apply-Fork $editor "settings" }
+                                $script:Notice = "Applying $($FORK_FULL[$editor])..."
+                                Show-Frame $script:Notice
+                                try { Apply-Fork $editor "settings"; $script:Notice = "$editor settings applied" }
                                 catch { $script:Notice = "[ERROR] $($_.Exception.Message)" }
                                 continue configpick
                             }
@@ -795,8 +737,11 @@ function Run-Dashboard {
                     }
                 }
                 "reset" {
+                    Show-Frame ""
                     $line = Read-Line 'Type "reset" to confirm: '
                     if ($null -ne $line -and $line.Trim() -eq "reset") {
+                        $script:Notice = "Resetting $($FORK_FULL[$editor])..."
+                        Show-Frame $script:Notice
                         try {
                             $Revert = $true; Apply-Fork $editor; $Revert = $false
                             $script:Notice = "$editor reset to factory defaults"
@@ -810,6 +755,7 @@ function Run-Dashboard {
                     continue actionpick
                 }
                 "uninstall" {
+                    Show-Frame ""
                     $line = Read-Line 'Type "uninstall" to confirm: '
                     if ($null -ne $line -and $line.Trim() -eq "uninstall") {
                         $script:Notice = "Uninstalling $($FORK_FULL[$editor])..."
@@ -830,171 +776,10 @@ function Run-Dashboard {
     }
 }
 
-# Resolve-ActionForks <arg> - empty = all forks, else one fork (code|codium).
-function Resolve-ActionForks($arg) {
-    if (-not $arg) { return @($FORK_ORDER) }
-    switch ($arg) {
-        "code"   { return @("code") }
-        "codium" { return @("codium") }
-        default  { Write-Host "[ERROR] unknown fork: $arg" -ForegroundColor Red; exit 1 }
-    }
-}
-
 # ------------------------------------------------------------
 #  Main
 # ------------------------------------------------------------
-# Note: no banner here - the dashboard self-renders via Show-Frame;
-# non-dashboard paths below print Show-Banner themselves.
-
-# action flags take priority (list-versions / install / uninstall)
-$action = ""
-$actionForks = @()
-$forkArg = if ($Rest.Count -gt 0) { $Rest -join " " } else { "" }
-if ($Install) { $action = "install"; $actionForks = Resolve-ActionForks $forkArg }
-if ($Uninstall) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u allowed" -ForegroundColor Red; exit 1 }
-    $action = "uninstall"; $actionForks = Resolve-ActionForks $forkArg
-}
-if ($ListVersions) {
-    if ($action) { Write-Host "[ERROR] conflicting actions: only one of -i/-u allowed" -ForegroundColor Red; exit 1 }
-    $action = "list-versions"; $actionForks = @()
-}
-
-if ($action) {
-    Show-Banner
-    if ($action -eq "list-versions") {
-        Show-ListVersions
-        exit 0
-    }
-    if ($DryRun) {
-        Write-Output ""
-        "{0,-10} {1,-12} {2,-12} {3}" -f "name", "installed", "latest", "action"
-        foreach ($f in $actionForks) {
-            $inst = Get-InstalledVersion $f
-            if (-not $inst) { $inst = "none" }
-            $latest = Get-LatestCached $f
-            $desc = switch ($action) {
-                "install"   { "install $latest" }
-                "uninstall" { "remove editor + config" }
-            }
-            "{0,-10} {1,-12} {2,-12} {3}" -f $f, $inst, $latest, $desc
-        }
-        Write-Output "DRY RUN - nothing applied."
-        exit 0
-    }
-    Write-Output ""
-    $line = Read-Line "Apply? [Y/n] "
-    $ans = if ($null -eq $line) { "n" } else { $line.Trim() }
-    if ($ans -match "^n") { Write-Output "aborted."; exit 0 }
-    Write-Output ""
-    try {
-        foreach ($f in $actionForks) {
-            Write-Output "${f}:"
-            switch ($action) {
-                "install" {
-                    if (Get-InstalledVersion $f) { Write-Output "$f already installed" }
-                    else { Install-Editor $f }
-                }
-                "uninstall" { Uninstall-Editor $f }
-            }
-            Write-Output ""
-        }
-    } catch {
-        Write-Host "[ERROR] $($_.Exception.Message)" -ForegroundColor Red
-        exit 1
-    }
-    exit 0
-}
-
-# no flags -> interactive dashboard
-if (-not $Revert -and -not $DryRun) {
-    Run-Dashboard
-    exit 0
-}
-
-$detected = @()
-foreach ($fork in $FORK_ORDER) {
-    if (Test-Fork $fork) { $detected += $fork }
-}
-
-Show-Banner
-Write-Output "Plan:"
-if ($Revert) { Write-Output "mode: revert to factory defaults" }
-"{0,-10} {1,-12} {2}" -f "name", "version", "status"
-"{0,-10} {1,-12} {2}" -f "----", "-------", "------"
-foreach ($f in $FORK_ORDER) {
-    if ($detected -contains $f) {
-        "{0,-10} {1,-12} {2}" -f $f, (Get-EditorVersion $f), (Get-Plan $f)
-    } else {
-        "{0,-10} {1,-12} {2}" -f $f, "n/a", "not installed"
-    }
-}
-Write-Output ""
-
-# selection (menu only when not dry-run and more than one fork)
-$selected = @($detected)
-if (-not $DryRun -and $detected.Count -gt 1) {
-    $checked = @{}
-    foreach ($f in $detected) { $checked[$f] = $true }
-
-    :menu while ($true) {
-        Write-Output "Detected editors:"
-        for ($i = 0; $i -lt $detected.Count; $i++) {
-            $mark = " "
-            if ($checked[$detected[$i]]) { $mark = "x" }
-            "{0}) [{1}] {2}" -f ($i + 1), $mark, $detected[$i]
-        }
-        Write-Output "a) select all     n) select none     <enter> = apply checked"
-        $line = Read-Line "toggle (e.g. 1 3), a=all, n=none, enter=apply "
-        $choice = if ($null -eq $line) { "" } else { $line.Trim() }
-
-        switch ($choice) {
-            ""  { break menu }
-            "a" { foreach ($f in $detected) { $checked[$f] = $true } }
-            "A" { foreach ($f in $detected) { $checked[$f] = $true } }
-            "n" { foreach ($f in $detected) { $checked[$f] = $false } }
-            "N" { foreach ($f in $detected) { $checked[$f] = $false } }
-            default {
-                foreach ($tok in ($choice -split "\s+")) {
-                    if ($tok -match "^\d+$") {
-                        $num = [int]$tok
-                        if ($num -ge 1 -and $num -le $detected.Count) {
-                            $f = $detected[$num - 1]
-                            $checked[$f] = -not $checked[$f]
-                        } else {
-                            Write-Output "invalid: $num"
-                        }
-                    } else {
-                        Write-Output "invalid: $tok"
-                    }
-                }
-            }
-        }
-    }
-
-    $selected = @()
-    foreach ($f in $detected) { if ($checked[$f]) { $selected += $f } }
-}
-
-if ($DryRun) {
-    Write-Output "DRY RUN - nothing applied."
-    exit 0
-}
-
-if ($selected.Count -eq 0) {
-    Write-Output "nothing to apply."
-    exit 0
-}
-
-Write-Output ""
-$line = Read-Line "Apply? [Y/n] "
-$ans = if ($null -eq $line) { "n" } else { $line.Trim() }
-if ($ans -match "^n") { Write-Output "aborted."; exit 0 }
-
-Write-Output ""
-foreach ($f in $selected) {
-    Write-Output "${f}:"
-    Apply-Fork $f
-    Write-Output ""
-}
-Write-Output "done."
+# syncode takes no arguments - the interactive dashboard is the whole tool:
+# pick an editor, then install (with a variant picker), config, reset,
+# uninstall. Run-Dashboard loops until Quit.
+Run-Dashboard

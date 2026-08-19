@@ -34,14 +34,14 @@ Write-Host "ps parse + ASCII check OK"
 # Engine to run syncode.ps1 under (matches this script's engine)
 if ($PSVersionTable.PSVersion.Major -ge 7) { $engine = "pwsh" } else { $engine = "powershell.exe" }
 
-function Invoke-DryRun([string]$scriptPath) {
-    $out = & $engine -NoProfile -File $scriptPath -d 2>&1 | Out-String
+function Invoke-Dashboard([string]$scriptPath) {
+    $out = "q`n" | & $engine -NoProfile -File $scriptPath 2>&1 | Out-String
     Write-Host $out
-    if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: dry-run exit $LASTEXITCODE"; exit 1 }
+    if ($LASTEXITCODE -ne 0) { Write-Host "FAIL: dashboard exit $LASTEXITCODE"; exit 1 }
     return $out
 }
 
-Write-Host "== sandbox dry-run (checkout layout, ../shared configs) =="
+Write-Host "== sandbox dashboard smoke test (checkout layout, ../shared configs) =="
 $sandbox = Join-Path $env:TEMP "ci-sandbox-checkout"
 if (Test-Path $sandbox) { Remove-Item $sandbox -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "VSCodium\User"), (Join-Path $sandbox "bin") | Out-Null
@@ -55,13 +55,12 @@ Copy-Item shared/settings.json (Join-Path $sandbox "Code\User\settings.json")
 '{"workbench.colorTheme":"Not Synced"}' | Set-Content (Join-Path $sandbox "VSCodium\User\settings.json") -Encoding ascii
 $env:APPDATA = $sandbox
 $env:Path = (Join-Path $sandbox "bin") + ";" + $env:Path
-$out = Invoke-DryRun "windows/syncode.ps1"
-if ($out -notmatch "settings already in sync") { Write-Host "FAIL: missing 'settings already in sync'"; exit 1 }
-if ($out -notmatch "copy settings") { Write-Host "FAIL: missing 'copy settings'"; exit 1 }
-if ($out -notmatch "DRY RUN") { Write-Host "FAIL: missing 'DRY RUN'"; exit 1 }
+$out = Invoke-Dashboard "windows/syncode.ps1"
+if ($out -notmatch "Pick an editor") { Write-Host "FAIL: missing 'Pick an editor'"; exit 1 }
+if ($out -notmatch "bye.") { Write-Host "FAIL: missing 'bye.'"; exit 1 }
 Remove-Item $sandbox -Recurse -Force
 
-Write-Host "== sandbox dry-run (flattened install layout, beside-script configs) =="
+Write-Host "== sandbox dashboard smoke test (flattened install layout, beside-script configs) =="
 $sandbox = Join-Path $env:TEMP "ci-sandbox-flat"
 if (Test-Path $sandbox) { Remove-Item $sandbox -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "bin") | Out-Null
@@ -74,8 +73,8 @@ if "%1"=="--list-extensions" echo aaron-bond.better-comments
 Copy-Item (Join-Path $sandbox "bin\code.cmd") (Join-Path $sandbox "bin\codium.cmd")
 $env:APPDATA = $sandbox
 $env:Path = (Join-Path $sandbox "bin") + ";" + $env:Path
-$out = Invoke-DryRun (Join-Path $sandbox "syncode.ps1")
-if ($out -notmatch "DRY RUN") { Write-Host "FAIL: missing 'DRY RUN'"; exit 1 }
+$out = Invoke-Dashboard (Join-Path $sandbox "syncode.ps1")
+if ($out -notmatch "Pick an editor") { Write-Host "FAIL: missing 'Pick an editor'"; exit 1 }
 Remove-Item $sandbox -Recurse -Force
 
 Write-Host "ALL WINDOWS CHECKS PASSED"
