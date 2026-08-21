@@ -1,7 +1,7 @@
 # ============================================================
-#  syncode.ps1 - Sync and manage your VSCode and VSCodium editors.
+#  syncode.ps1 - Sync and manage your VSCode, VSCodium and Zed editors.
 #  Windows / PowerShell version (Windows only).
-#  Version: 1.4.0
+#  Version: 1.5.0
 # ============================================================
 $ErrorActionPreference = "Stop"
 $Revert = $false
@@ -12,9 +12,9 @@ if ($args.Count -gt 0) {
     exit 1
 }
 
-$VERSION_STR = "1.4.0"
+$VERSION_STR = "1.5.0"
 $TOOL_NAME = "syncode"
-$DESCRIPTION = "Sync and manage your VSCode and VSCodium editors"
+$DESCRIPTION = "Sync and manage your VSCode, VSCodium and Zed editors"
 
 $BANNER = @'
 :'######::'##:::'##:'##::: ##::'######:::'#######::'########::'########:
@@ -30,8 +30,9 @@ $BANNER = @'
 # Script directory (install.ps1 runs this from a temp dir with the configs beside it)
 $SCRIPT_DIR = $PSScriptRoot
 
-# Config dir: beside the script (install temp dir) or ..\shared (repo checkout)
-if ((Test-Path (Join-Path $SCRIPT_DIR "settings.json")) -and (Test-Path (Join-Path $SCRIPT_DIR "extensions.json"))) {
+# Config dir: beside the script (install temp dir, per-editor subdirs)
+# or ..\shared (repo checkout)
+if ((Test-Path (Join-Path $SCRIPT_DIR "code\settings.json")) -and (Test-Path (Join-Path $SCRIPT_DIR "code\extensions.json"))) {
     $CONFIG_DIR = $SCRIPT_DIR
 } else {
     $CONFIG_DIR = Join-Path $SCRIPT_DIR "..\shared"
@@ -188,38 +189,76 @@ $DATA_ROOT = if ($env:APPDATA) { $env:APPDATA } else { Join-Path $HOME "AppData\
 $FORK_DIR = @{
     code      = "Code"
     codium    = "VSCodium"
+    zed       = "zed"
 }
-$FORK_ORDER = @("code", "codium")
+$FORK_ORDER = @("code", "codium", "zed")
 $FORK_FULL = @{
     code      = "VSCode"
     codium    = "VSCodium"
+    zed       = "Zed"
 }
 
-function Get-SettingsPath($fork) { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User\settings.json" }
-function Get-BackupPath($fork)   { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User\settings.json.bak" }
+# fork -> extensions install dir (zed only; VSCode-family forks manage
+# extensions through their CLI instead)
+$FORK_EXT_DIR = @{
+    zed       = (Join-Path $env:LOCALAPPDATA "Zed\extensions\installed")
+}
+
+# zed's config sits flat under its dir (no User subdir like the
+# VSCode-family forks): %APPDATA%\Zed\settings.json
+function Get-SettingsPath($fork) {
+    if ($fork -eq "zed") { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\settings.json" }
+    else                 { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User\settings.json" }
+}
+function Get-BackupPath($fork) {
+    if ($fork -eq "zed") { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\settings.json.bak" }
+    else                 { Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User\settings.json.bak" }
+}
+
+# per-editor source configs under CONFIG_DIR (<editor>\settings.json,
+# <editor>\extensions.json)
+function Get-SettingsSrc($fork) { Join-Path $CONFIG_DIR "$fork\settings.json" }
+function Get-ExtFile($fork)     { Join-Path $CONFIG_DIR "$fork\extensions.json" }
 
 # ------------------------------------------------------------
 #  Detection
 # ------------------------------------------------------------
 function Test-Fork($fork) {
     if (Get-Command -Name $fork -ErrorAction SilentlyContinue) { return $true }
-    if (Test-Path (Join-Path $DATA_ROOT "$($FORK_DIR[$fork])\User")) { return $true }
+    $d = Join-Path $DATA_ROOT $FORK_DIR[$fork]
+    if ($fork -ne "zed") { $d = Join-Path $d "User" }
+    if (Test-Path $d) { return $true }
     return $false
 }
 
 # ------------------------------------------------------------
 #  Extension helpers
 # ------------------------------------------------------------
-function Get-ExtIds {
-    # extract "publisher.name" entries from extensions.json (regex, like the bash version)
-    $text = [IO.File]::ReadAllText((Join-Path $CONFIG_DIR "extensions.json"), [Text.Encoding]::UTF8)
-    @([regex]::Matches($text, '"[a-z0-9-]+\.[a-z0-9-]+"')) | ForEach-Object { $_.Value.Trim('"') }
+function Get-ExtIds($fork) {
+    # extract extension IDs from <fork>'s extensions.json (regex, like the bash version).
+    # code/codium: "publisher.name" anywhere in the file.
+    # zed: dot-less IDs, each ALONE on its line (format constraint
+    # documented in shared/zed/extensions.json).
+    $text = [IO.File]::ReadAllText((Get-ExtFile $fork), [Text.Encoding]::UTF8)
+    if ($fork -eq "zed") {
+        @([regex]::Matches($text, '(?m)^\s*"([a-z0-9-]+)",?\s*$')) | ForEach-Object { $_.Groups[1].Value }
+    } else {
+        @([regex]::Matches($text, '"[a-z0-9-]+\.[a-z0-9-]+"')) | ForEach-Object { $_.Value.Trim('"') }
+    }
 }
 
 $script:ExtCache = @{}
 
 function Get-InstalledExts($fork) {
     if ($script:ExtCache.ContainsKey($fork)) { return $script:ExtCache[$fork] }
+    if ($fork -eq "zed") {
+        # no extension CLI: an extension counts as installed when its
+        # folder exists under FORK_EXT_DIR[zed]
+        $d = $FORK_EXT_DIR["zed"]
+        $exts = if (Test-Path $d) { @(Get-ChildItem $d -Directory | ForEach-Object { $_.Name }) } else { @() }
+        $script:ExtCache[$fork] = $exts
+        return $exts
+    }
     $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
     if (-not $cli) { $script:ExtCache[$fork] = @(); return @() }
     # $null | closes stdin on the native CLI so it can't eat interactive input;
@@ -240,7 +279,7 @@ function Get-EditorVersion($fork) {
 
 function Get-MissingExts($fork) {
     $have = @(Get-InstalledExts $fork)
-    @(Get-ExtIds) | Where-Object { $have -notcontains $_ }
+    @(Get-ExtIds $fork) | Where-Object { $have -notcontains $_ }
 }
 
 function Test-SameSettings($a, $b) {
@@ -261,7 +300,7 @@ function Read-Line($prompt) {
 function Get-Plan($fork) {
     $sp = Get-SettingsPath $fork
     $bd = Get-BackupPath $fork
-    $settingsSrc = Join-Path $CONFIG_DIR "settings.json"
+    $settingsSrc = Get-SettingsSrc $fork
 
     if ($Revert) {
         if (Test-Path $bd) { $out = "restore settings.json from .bak" }
@@ -275,7 +314,7 @@ function Get-Plan($fork) {
             if (Test-Path $bd) { $out += " (overwrite .bak)" }
         }
         $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-        if ($cli) {
+        if ($cli -or $fork -eq "zed") {
             $missing = @(Get-MissingExts $fork)
             if ($missing.Count -gt 0) { $out += ", install missing extensions: $($missing -join ' ')" }
             else                      { $out += ", extensions up to date" }
@@ -289,7 +328,7 @@ function Get-Plan($fork) {
 function Apply-Fork($fork, $Scope = "all") {
     $sp = Get-SettingsPath $fork
     $bd = Get-BackupPath $fork
-    $settingsSrc = Join-Path $CONFIG_DIR "settings.json"
+    $settingsSrc = Get-SettingsSrc $fork
 
     New-Item -ItemType Directory -Force -Path (Split-Path $sp) | Out-Null
 
@@ -316,17 +355,25 @@ function Apply-Fork($fork, $Scope = "all") {
     }
 
     if ($Scope -in @("all", "extensions")) {
-        # extensions: install missing / uninstall syncode-installed
+        # extensions: install missing / uninstall syncode-installed.
+        # zed has no extension CLI - its picker queues entries into the
+        # source template's auto_install_extensions; here only Reset mode
+        # removes managed extension folders from disk.
         $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-        if ($cli) {
+        if ($cli -or $fork -eq "zed") {
             if ($Revert) {
-                foreach ($id in @(Get-ExtIds)) {
+                foreach ($id in @(Get-ExtIds $fork)) {
                     if (@(Get-InstalledExts $fork) -contains $id) {
-                        $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
-                        Write-Output "${fork}: uninstalled $id"
+                        if ($fork -eq "zed") {
+                            Remove-Item -Recurse -Force (Join-Path $FORK_EXT_DIR[$fork] $id) -ErrorAction SilentlyContinue
+                            Write-Output "${fork}: uninstalled $id"
+                        } else {
+                            $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
+                            Write-Output "${fork}: uninstalled $id"
+                        }
                     }
                 }
-            } else {
+            } elseif ($fork -ne "zed") {
                 foreach ($id in @(Get-MissingExts $fork)) {
                     $null | & $cli.Source --install-extension $id --force 2>$null | Out-Null
                     if ($LASTEXITCODE -eq 0) { Write-Output "${fork}: installed $id" }
@@ -339,6 +386,73 @@ function Apply-Fork($fork, $Scope = "all") {
         }
     }
     Reset-ExtCache $fork
+}
+
+# Set-ZedExtension <id> <true|false> - upsert "id": value into the
+# auto_install_extensions block of the zed SOURCE template; callers
+# redeploy settings afterwards so the change reaches the editor. Zed has
+# no extension CLI - entries here make Zed install (true) or
+# skip+never-reinstall (false) on launch. We own the template's shape,
+# so the block is regenerated wholesale (sorted keys, valid JSON commas).
+# Returns $false when the template or block can't be found.
+# ponytail: regex surgery on a file whose format syncode controls;
+# revisit only if hand-edited templates become a support theme.
+function Set-ZedExtension($id, $val) {
+    $src = Get-SettingsSrc "zed"
+    if (-not (Test-Path $src)) { return $false }
+    $lines = @(Get-Content $src)
+
+    # harvest current managed entries from the block
+    $cur = @{}
+    $inblk = $false
+    $found = $false
+    foreach ($line in $lines) {
+        if (-not $inblk) {
+            if ($line -match '"auto_install_extensions"\s*:\s*\{') {
+                $found = $true
+                # inline empty form ("{}") closes on the same line
+                if ($line -notmatch '\}\s*,?\s*$') { $inblk = $true }
+            }
+            continue
+        }
+        if ($line -match '^\s*\}') { break }
+        if ($line -match '"([a-z0-9-]+)"\s*:\s*(true|false)') { $cur[$Matches[1]] = $Matches[2] }
+    }
+    if (-not $found) { return $false }
+    $cur[$id] = "$val".ToLower()
+
+    # rebuild body: sorted keys, commas only between entries
+    $body = ""
+    $keys = @($cur.Keys | Sort-Object)
+    for ($i = 0; $i -lt $keys.Count; $i++) {
+        $body += ('    "{0}": {1}' -f $keys[$i], $cur[$keys[$i]])
+        if ($i -lt $keys.Count - 1) { $body += "," }
+        $body += "`n"
+    }
+
+    # splice: copy the file, swapping the block region for the rebuild
+    $out = New-Object System.Collections.Generic.List[string]
+    $emit = $true
+    foreach ($line in $lines) {
+        if ($emit) {
+            if ($line -match '^(\s*)"auto_install_extensions"\s*:\s*\{\}(.*)$') {
+                $out.Add(('{0}"auto_install_extensions": {{' -f $Matches[1]))
+                foreach ($b in ($body -split "`n")) { if ($b) { $out.Add($b) } }
+                $out.Add(('{0}}}{1}' -f $Matches[1], $Matches[2]))
+                $emit = $false
+            } elseif ($line -match '"auto_install_extensions"\s*:\s*\{') {
+                $out.Add($line)
+                $emit = $false
+            } else {
+                $out.Add($line)
+            }
+        } elseif ($line -match '^(\s*\})(.*)$') {
+            $out.Add($Matches[1] + $Matches[2])
+            $emit = $true
+        }
+    }
+    Set-Content -Path $src -Value $out -Encoding ASCII
+    return $true
 }
 
 # ------------------------------------------------------------
@@ -368,6 +482,7 @@ function Resolve-Cli($fork) {
     switch ($fork) {
         "code"   { $p = Join-Path $env:LOCALAPPDATA "Programs\Microsoft VS Code\bin\code.cmd" }
         "codium" { $p = Join-Path $env:LOCALAPPDATA "Programs\VSCodium\bin\codium.cmd" }
+        "zed"    { $p = Join-Path $env:LOCALAPPDATA "Programs\Zed\zed.exe" }
     }
     if (Test-Path $p) { return $p }
     return ""
@@ -387,7 +502,7 @@ function Show-Dashboard {
         $latest = Get-LatestCached $f
         $sp = Get-SettingsPath $f
         if (Test-Path $sp) {
-            if (Test-SameSettings $sp (Join-Path $CONFIG_DIR "settings.json")) {
+            if (Test-SameSettings $sp (Get-SettingsSrc $f)) {
                 $settings = "synced"
             } else {
                 $settings = "diverged"
@@ -460,10 +575,12 @@ function Show-Frame($notice) {
 # Install-Editor <fork> [<variant>] - download (syncode temp name) + silent
 # install. Variant is a releases.json installer key: "win" (user exe, default),
 # "winSystem" (system exe), "winMsi" (VSCodium MSI). exe installers run Inno
-# (/VERYSILENT /NORESTART /mergetasks=!runcode so the editor doesn't relaunch);
-# msi installers run msiexec. The download renders a live progress line; the
-# installer run renders a spinner. "already installed" check lives at the call
-# sites; installs are always fresh (no update path - editors self-update).
+# (/VERYSILENT /NORESTART, plus /mergetasks=!runcode for VSCode-family so the
+# editor doesn't relaunch); msi installers run msiexec. Zed's installer is
+# also Inno but has no runcode task - plain /VERYSILENT /NORESTART.
+# The download renders a live progress line; the installer run renders a
+# spinner. "already installed" check lives at the call sites; installs are
+# always fresh (no update path - editors self-update).
 function Install-Editor($fork, $variant = "win") {
     $ver = Get-LatestCached $fork
     if ($ver -eq "unknown") { throw "${fork}: can't determine latest version" }
@@ -473,6 +590,8 @@ function Install-Editor($fork, $variant = "win") {
     Get-Download $fork $ver $url $tmp
     if ($ext -eq "msi") {
         $p = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i", $tmp, "/qn", "/norestart" -PassThru
+    } elseif ($fork -eq "zed") {
+        $p = Start-Process -FilePath $tmp -ArgumentList "/VERYSILENT", "/NORESTART" -PassThru
     } else {
         $p = Start-Process -FilePath $tmp -ArgumentList "/VERYSILENT", "/NORESTART", "/mergetasks=!runcode" -PassThru
     }
@@ -490,7 +609,7 @@ function Install-Editor($fork, $variant = "win") {
 # dirs; MSI installs have no unins000.exe and fall through to winget by design.
 function Uninstall-Editor($fork) {
     # install dir name differs from config dir name for code (Microsoft VS Code)
-    $installDir = if ($fork -eq "code") { "Microsoft VS Code" } else { "VSCodium" }
+    $installDir = @{ code = "Microsoft VS Code"; codium = "VSCodium"; zed = "Zed" }[$fork]
     $dirs = @(
         (Join-Path $env:LOCALAPPDATA "Programs\$installDir"),
         (Join-Path ${env:ProgramFiles(x86)} "$installDir"),
@@ -509,6 +628,9 @@ function Uninstall-Editor($fork) {
         $id = Get-ReleaseWinget $fork
         Write-Output "${fork}: unins000.exe not found - winget fallback: $id"
         winget uninstall --id $id --silent --accept-source-agreements | Out-Null
+    }
+    if ($fork -eq "zed") {
+        Remove-Item -Recurse -Force $FORK_EXT_DIR[$fork] -ErrorAction SilentlyContinue
     }
     Remove-Item -Recurse -Force (Join-Path $DATA_ROOT $FORK_DIR[$fork]) -ErrorAction SilentlyContinue
     Write-Output "$fork removed"
@@ -558,7 +680,7 @@ function Select-InstallVariant($fork) {
 # the config menu, q=quit. Only toggle state lives here; i/u run the CLI.
 # Feedback goes to $script:Notice so the repainted frame keeps showing it.
 function Pick-Extensions($fork) {
-    $ids = @(Get-ExtIds)
+    $ids = @(Get-ExtIds $fork)
     if ($ids.Count -eq 0) { $script:Notice = "no extensions in extensions.json"; return }
     $sel = @{}
     :extpick while ($true) {
@@ -597,30 +719,61 @@ function Pick-Extensions($fork) {
                 $picked = @($ids | Where-Object { $sel[$_] })
                 if ($picked.Count -eq 0) { $script:Notice = "nothing selected"; continue extpick }
                 $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-                if (-not $cli) { $script:Notice = "$fork not on PATH - cannot install"; continue extpick }
+                if (-not $cli -and $fork -ne "zed") { $script:Notice = "$fork not on PATH - cannot install"; continue extpick }
                 $out = @()
-                foreach ($id in $picked) {
-                    $null | & $cli.Source --install-extension $id --force 2>$null | Out-Null
-                    if ($LASTEXITCODE -eq 0) { $out += "installed $id" }
-                    else                     { Write-LogWarn "${fork}: FAILED to install $id" }
+                if ($fork -eq "zed") {
+                    # no extension CLI: queue entries in the source template's
+                    # auto_install_extensions, then deploy settings so Zed picks
+                    # them up on next launch.
+                    foreach ($id in $picked) {
+                        if (Set-ZedExtension $id "true") { $out += "queued $id" }
+                        else                             { $out += "FAILED to queue $id" }
+                    }
+                    Apply-Fork $fork settings
+                    $sel.Clear()
+                    $script:Notice = $out -join "`n"
+                    Reset-ExtCache $fork
+                } else {
+                    foreach ($id in $picked) {
+                        $null | & $cli.Source --install-extension $id --force 2>$null | Out-Null
+                        if ($LASTEXITCODE -eq 0) { $out += "installed $id" }
+                        else                     { Write-LogWarn "${fork}: FAILED to install $id" }
+                    }
+                    $sel.Clear()
+                    $script:Notice = $out -join "`n"
+                    Reset-ExtCache $fork
                 }
-                $sel.Clear()
-                $script:Notice = $out -join "`n"
-                Reset-ExtCache $fork
             }
             "u" {
                 $picked = @($ids | Where-Object { $sel[$_] })
                 if ($picked.Count -eq 0) { $script:Notice = "nothing selected"; continue extpick }
                 $cli = Get-Command -Name $fork -ErrorAction SilentlyContinue
-                if (-not $cli) { $script:Notice = "$fork not on PATH - cannot uninstall"; continue extpick }
+                if (-not $cli -and $fork -ne "zed") { $script:Notice = "$fork not on PATH - cannot uninstall"; continue extpick }
                 $out = @()
-                foreach ($id in $picked) {
-                    $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
-                    $out += "uninstalled $id"
+                if ($fork -eq "zed") {
+                    # mark never-reinstall in the template + drop the installed
+                    # folder now, then deploy so settings.json reflects it.
+                    foreach ($id in $picked) {
+                        if (Set-ZedExtension $id "false") {
+                            Remove-Item -Recurse -Force (Join-Path $FORK_EXT_DIR[$fork] $id) -ErrorAction SilentlyContinue
+                            $out += "uninstalled $id"
+                        } else {
+                            $out += "FAILED to update $id"
+                        }
+                    }
+                    Apply-Fork $fork settings
+                    $sel.Clear()
+                    $script:Notice = $out -join "`n"
+                    Reset-ExtCache $fork
+                } else {
+                    foreach ($id in $picked) {
+                        $null | & $cli.Source --uninstall-extension $id 2>$null | Out-Null
+                        $out += "uninstalled $id"
+                    }
+                    $sel.Clear()
+                    $script:Notice = $out -join "`n"
+                    Reset-ExtCache $fork
                 }
-                $sel.Clear()
-                $script:Notice = $out -join "`n"
-                Reset-ExtCache $fork
             }
             "m" { return }
             "q" { Write-Output "bye."; exit 0 }
@@ -643,7 +796,8 @@ function Run-Dashboard {
             Write-Output ""
             Write-Output "1. VSCode"
             Write-Output "2. VSCodium"
-            Write-Output "3. Quit"
+            Write-Output "3. Zed"
+            Write-Output "4. Quit"
             Write-Output ""
             $line = Read-Line "Enter an option: "
             if ($null -eq $line) { Write-Output "bye."; exit 0 }
@@ -651,11 +805,13 @@ function Run-Dashboard {
             switch ($line) {
                 "1"      { $editor = "code"; break editorpick }
                 "2"      { $editor = "codium"; break editorpick }
-                "3"      { Write-Output "bye."; exit 0 }
+                "3"      { $editor = "zed"; break editorpick }
+                "4"      { Write-Output "bye."; exit 0 }
                 "q"      { Write-Output "bye."; exit 0 }
                 "Q"      { Write-Output "bye."; exit 0 }
                 "code"   { $editor = "code"; break editorpick }
                 "codium" { $editor = "codium"; break editorpick }
+                "zed"    { $editor = "zed"; break editorpick }
                 default  { $script:Notice = "invalid: $line"; continue editorpick }
             }
         }
@@ -695,8 +851,12 @@ function Run-Dashboard {
                     if (Get-InstalledVersion $editor) {
                         $script:Notice = "$editor already installed"
                     } else {
-                        Show-Frame ""
-                        $variant = Select-InstallVariant $editor
+                        # zed ships a single installer - no variant picker
+                        if ($editor -eq "zed") { $variant = "win" }
+                        else {
+                            Show-Frame ""
+                            $variant = Select-InstallVariant $editor
+                        }
                         if ($variant -eq "menu") { continue actionpick }
                         if ($variant -eq "quit") { Write-Output "bye."; exit 0 }
                         $script:Notice = "Installing $($FORK_FULL[$editor])..."

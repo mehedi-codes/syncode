@@ -1,0 +1,120 @@
+{
+  // ============================================================
+  //  CURRENT SETTINGS — VSCodium live config (2026-08-16)
+  //  Grouped for readability. This file mirrors the live
+  //  settings.json (VSCodium/VS Code).
+  // ============================================================
+
+  //! Workbench & window
+  "window.commandCenter": false,                    // hide the command center from the title bar
+  "window.menuBarVisibility": "toggle",             // menu bar hidden; Alt shows it
+  "window.zoomLevel": 1,                            // UI zoom
+  "workbench.layoutControl.enabled": false,         // hide layout controls (top-right)
+  "workbench.activityBar.location": "hidden",       // hide the activity bar entirely
+  "workbench.statusBar.visible": false,             // hide the status bar
+  "workbench.panel.showLabels": false,              // panel tabs show icons only
+  "workbench.startupEditor": "readme",              // open the README on startup
+  "workbench.editor.labelFormat": "short",          // file names only (no path)
+  "workbench.editor.showTabs": "single",            // show one tab for the active editor
+  "workbench.editor.enablePreview": false,          // open files as permanent tabs (previews off)
+  "workbench.editor.empty.hint": "hidden",          // no placeholder hint on the empty editor area
+  "workbench.list.smoothScrolling": true,           // smooth list scrolling
+  "workbench.tree.enableStickyScroll": false,       // no sticky headers in trees
+  "workbench.tree.renderIndentGuides": "none",      // no tree indent guides
+  "workbench.tree.indent": 8,                       // tree indent width (px)
+  "breadcrumbs.enabled": false,                     // hide breadcrumbs
+  "workbench.iconTheme": "charmed-icons",           // file icon set
+  "workbench.experimental.modernUI": true,          // VSCodium experimental modern UI
+  "workbench.experimental.fontFamily": "DankMono Nerd Font", // modern UI font
+  // "workbench.experimental.fontSize": 16,         // disabled in live — modern UI uses its default
+
+  //! Editor
+  "editor.fontFamily": "DankMono Nerd Font",        // editor font
+  // "editor.fontSize": 16,                         // disabled in live — editor uses its default
+  "editor.fontLigatures": true,                     // ligatures on
+  "editor.lineHeight": 2,                           // line height (px); note: nominally 2px with 16px font, editor may clamp it
+  "editor.renderLineHighlight": "gutter",           // highlight only the gutter on the active line
+  "editor.wordWrap": "wordWrapColumn",              // wrap at the word-wrap column
+  "editor.wordWrapColumn": 140,                     // wrap column
+  "editor.rulers": [140],                           // vertical rulers at column 140
+  "editor.glyphMargin": false,                      // hide the glyph margin (breakpoints area)
+  "editor.minimap.enabled": false,                  // no minimap
+  "editor.scrollbar.verticalScrollbarSize": 5,      // vertical scrollbar width (px)
+  "editor.scrollbar.horizontalScrollbarSize": 5,    // horizontal scrollbar height (px)
+  "editor.linkedEditing": true,                     // auto-rename matching HTML/JSX tags
+  "editor.cursorBlinking": "expand",                // cursor blink style
+  "editor.cursorSmoothCaretAnimation": "on",        // smooth caret motion
+  "editor.guides.bracketPairs": "active",           // show guides for active bracket pairs
+  "editor.selectionHighlight": false,               // don't highlight same-word selections
+  "editor.occurrencesHighlight": "off",             // don't highlight symbol occurrences
+  "editor.stickyScroll.enabled": false,             // no sticky scroll in editors
+  "editor.hideCursorInOverviewRuler": true,         // no cursor in the overview ruler
+  "editor.codeLens": false,                         // no code lens
+  "editor.smoothScrolling": true,                   // smooth editor scrolling
+  "editor.snippetSuggestions": "bottom",            // snippet suggestions listed at bottom
+  "editor.suggest.localityBonus": true,             // boost suggestions near the cursor
+  "editor.acceptSuggestionOnCommitCharacter": false,// don't accept suggestions on commit chars
+  "editor.accessibilitySupport": "off",             // disable screen-reader-optimized mode
+  "editor.inlineSuggest.enabled": true,             // inline ghost-text suggestions
+  "editor.hover.delay": 500,                        // 500ms hover delay
+  "editor.tabCompletion": "on",                     // suggest on tab
+  "editor.bracketPairColorization.enabled": true,   // colorize bracket pairs
+  "editor.bracketPairColorization.independentColorPoolPerBracketType": true, // per-type bracket colors
+  "editor.renderWhitespace": "trailing",            // show trailing whitespace only
+  "editor.renderControlCharacters": false,          // don't show control characters
+  "editor.formatOnSave": true,                      // format on save
+  "editor.formatOnType": true,                      // format as you type
+  "editor.formatOnPaste": true,                     // format pasted code
+  "editor.tokenColorCustomizations": {              // syntax highlighting tweaks
+    "textMateRules": [
+      {
+        "scope": "comment",
+        "settings": { "fontStyle": "italic" }       // italic comments
+      }
+    ]
+  },
+
+  //! Explorer & files
+  "explorer.compactFolders": false,                 // don't compact nested folders
+  "explorer.decorations.badges": false,             // no source-control badges in explorer
+  "git.decorations.enabled": false,                 // no git status decorations in explorer
+  "files.autoSave": "afterDelay",                   // autosave after delay
+  "files.insertFinalNewline": true,                 // ensure trailing newline
+  "files.trimTrailingWhitespace": true,             // trim trailing whitespace on save
+  "files.defaultLanguage": "${activeEditorLanguage}", // new files inherit the active language
+
+  //! Git
+  "git.enableSmartCommit": true,                    // stage-all + commit in one action
+  "git.autofetch": "all",                           // auto-fetch all remotes
+  "git.confirmSync": false,                         // no confirm dialog on sync
+  "js/ts.updateImportsOnFileMove.enabled": "always",// auto-update import paths on move
+
+  //! Terminal
+  "terminal.integrated.fontFamily": "DankMono Nerd Font", // terminal font
+  // "terminal.integrated.fontSize": 16,            // disabled in live — terminal uses its default
+  "terminal.integrated.fontLigatures.enabled": true,// ligatures in the terminal
+  "terminal.integrated.cursorStyle": "line",        // terminal cursor style
+  "terminal.integrated.cursorStyleInactive": "none",// no cursor when terminal is unfocused
+
+  //! Extensions
+  "extensions.ignoreRecommendations": true,         // don't nag about recommended extensions
+  "charmed-icons.hidesExplorerArrows": true,        // charmed-icons: hide explorer arrows
+
+  //! Chat / AI
+  "chat.titleBar.signIn.enabled": false,            // hide the AI sign-in button from the title bar
+  "chat.titleBar.openInAgentsWindow.enabled": false,// hide the agents-window button from the title bar
+  "chat.viewSessions.orientation": "stacked",       // stack chat sessions vertically
+
+  //! Custom UI (custom-ui-style)
+  "custom-ui-style.stylesheet": {                   // injected CSS overrides
+    ".sidebar .title-label h2": "text-transform: none !important", // sidebar title = exact folder name
+    ".title-actions": "display: none !important",   // hide title bar actions
+    ".quick-input-widget": "top: 30vh !important",  // command palette opens mid-screen
+    ".quick-input-list .scrollbar": "display: none", // no scrollbar in quick input
+    ".quick-input-widget.show-file-icons": "box-shadow: none !important" // no shadow on quick input
+  },
+
+  //! Security & telemetry
+  "security.workspace.trust.untrustedFiles": "prompt", // prompt before opening untrusted files
+  "telemetry.telemetryLevel": "off"                 // no telemetry
+}

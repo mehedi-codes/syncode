@@ -44,37 +44,58 @@ function Invoke-Dashboard([string]$scriptPath) {
 Write-Host "== sandbox dashboard smoke test (checkout layout, ../shared configs) =="
 $sandbox = Join-Path $env:TEMP "ci-sandbox-checkout"
 if (Test-Path $sandbox) { Remove-Item $sandbox -Recurse -Force }
-New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "VSCodium\User"), (Join-Path $sandbox "bin") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "VSCodium\User"), `
+    (Join-Path $sandbox "zed"), (Join-Path $sandbox "Zed\extensions\installed\html"), (Join-Path $sandbox "bin") | Out-Null
 @'
 @echo off
 if "%1"=="--version" echo 1.2.3
 if "%1"=="--list-extensions" echo aaron-bond.better-comments & echo editorconfig.editorconfig
 '@ | Set-Content (Join-Path $sandbox "bin\code.cmd") -Encoding ascii
 Copy-Item (Join-Path $sandbox "bin\code.cmd") (Join-Path $sandbox "bin\codium.cmd")
-Copy-Item shared/settings.json (Join-Path $sandbox "Code\User\settings.json")
+@'
+@echo off
+if "%1"=="--version" echo Zed 1.2.3
+'@ | Set-Content (Join-Path $sandbox "bin\zed.cmd") -Encoding ascii
+Copy-Item shared/code/settings.json (Join-Path $sandbox "Code\User\settings.json")
 '{"workbench.colorTheme":"Not Synced"}' | Set-Content (Join-Path $sandbox "VSCodium\User\settings.json") -Encoding ascii
+Copy-Item shared/zed/settings.json (Join-Path $sandbox "zed\settings.json")
 $env:APPDATA = $sandbox
+$env:LOCALAPPDATA = $sandbox
 $env:Path = (Join-Path $sandbox "bin") + ";" + $env:Path
 $out = Invoke-Dashboard "windows/syncode.ps1"
 if ($out -notmatch "Pick an editor") { Write-Host "FAIL: missing 'Pick an editor'"; exit 1 }
+if ($out -notmatch "Zed") { Write-Host "FAIL: missing 'Zed'"; exit 1 }
 if ($out -notmatch "bye.") { Write-Host "FAIL: missing 'bye.'"; exit 1 }
 Remove-Item $sandbox -Recurse -Force
 
 Write-Host "== sandbox dashboard smoke test (flattened install layout, beside-script configs) =="
 $sandbox = Join-Path $env:TEMP "ci-sandbox-flat"
 if (Test-Path $sandbox) { Remove-Item $sandbox -Recurse -Force }
-New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "bin") | Out-Null
-Copy-Item windows/syncode.ps1, windows/version.ps1, windows/release.ps1, shared/settings.json, shared/extensions.json, shared/releases.json $sandbox
+New-Item -ItemType Directory -Force -Path (Join-Path $sandbox "Code\User"), (Join-Path $sandbox "bin"), `
+    (Join-Path $sandbox "code"), (Join-Path $sandbox "codium"), (Join-Path $sandbox "zed") | Out-Null
+Copy-Item windows/syncode.ps1, windows/version.ps1, windows/release.ps1, shared/releases.json $sandbox
+Copy-Item shared/code/settings.json (Join-Path $sandbox "code\settings.json")
+Copy-Item shared/code/extensions.json (Join-Path $sandbox "code\extensions.json")
+Copy-Item shared/codium/settings.json (Join-Path $sandbox "codium\settings.json")
+Copy-Item shared/codium/extensions.json (Join-Path $sandbox "codium\extensions.json")
+Copy-Item shared/zed/settings.json (Join-Path $sandbox "zed\settings.json")
+Copy-Item shared/zed/extensions.json (Join-Path $sandbox "zed\extensions.json")
 @'
 @echo off
 if "%1"=="--version" echo 1.2.3
 if "%1"=="--list-extensions" echo aaron-bond.better-comments
 '@ | Set-Content (Join-Path $sandbox "bin\code.cmd") -Encoding ascii
 Copy-Item (Join-Path $sandbox "bin\code.cmd") (Join-Path $sandbox "bin\codium.cmd")
+@'
+@echo off
+if "%1"=="--version" echo Zed 1.2.3
+'@ | Set-Content (Join-Path $sandbox "bin\zed.cmd") -Encoding ascii
 $env:APPDATA = $sandbox
+$env:LOCALAPPDATA = $sandbox
 $env:Path = (Join-Path $sandbox "bin") + ";" + $env:Path
 $out = Invoke-Dashboard (Join-Path $sandbox "syncode.ps1")
 if ($out -notmatch "Pick an editor") { Write-Host "FAIL: missing 'Pick an editor'"; exit 1 }
+if ($out -notmatch "Zed") { Write-Host "FAIL: missing 'Zed'"; exit 1 }
 Remove-Item $sandbox -Recurse -Force
 
 Write-Host "ALL WINDOWS CHECKS PASSED"

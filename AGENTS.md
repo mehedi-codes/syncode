@@ -4,8 +4,9 @@ Guidance for AI agents working in this repository.
 
 ## What this project is
 
-**syncode** — a one-command tool that syncs your VS Code-family editor setup
-(settings + extensions) to every installed editor fork. It is a single
+**syncode** — a one-command tool that syncs your editor setup (settings +
+extensions) to every installed editor: VS Code, VSCodium, and Zed, each with
+its own config. It is a single
 **interactive dashboard**: a repaint loop that shows a status table
 (installed / latest / settings / extensions) for each editor, then lets you
 pick an editor and an action — install (with an installer-variant picker on
@@ -30,18 +31,19 @@ sandboxed dashboard smoke tests + syntax/parse checks — see the layout table.
 | `windows/syncode.ps1` | The whole Windows tool (PowerShell). |
 | `windows/version.ps1` | Windows version comparison module (dot-sourced by `syncode.ps1`). |
 | `windows/release.ps1` | Windows release lookups (dot-sourced by `syncode.ps1`). |
-| `shared/settings.json` | Source-of-truth editor settings (JSONC). Applied via the dashboard's config → Settings. |
-| `shared/extensions.json` | Extension IDs to install (JSONC). Only `"publisher.name"` strings matter. |
-| `shared/releases.json` | Per-fork release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers the dashboard's install/uninstall and latest column. |
-| `shared/extensions.md` | Usage guides for every extension listed in `extensions.json`. |
+| `shared/<editor>/settings.json` | Source-of-truth settings per editor (`code/`, `codium/`, `zed/`), JSONC. Applied via the dashboard's config → Settings. |
+| `shared/<editor>/extensions.json` | Extension IDs to install per editor (JSONC). Only quoted ID strings matter — see the parsing conventions below. |
+| `shared/releases.json` | Per-editor release facts: latest-API URL, installer URLs, uninstall method, winget id. Powers the dashboard's install/uninstall and latest column. |
+| `shared/extensions.md` | Usage guides for every extension listed in all three `extensions.json` files. |
 | `.github/workflows/ci.yml` | GitHub Actions entrypoint: Linux checks (`bash .github/ci/linux.sh`) + Windows checks (`.github/ci/windows.ps1` under pwsh 7 and 5.1). |
 | `.github/ci/linux.sh` | Linux CI: bash syntax, release self-check, sandbox dashboard smoke tests (checkout + flattened layouts), extensions.md coverage, version lockstep. |
 | `.github/ci/windows.ps1` | Windows CI: ps1 parse (7 + 5.1) + ASCII check, sandbox dashboard smoke tests (checkout + flattened layouts). |
 | `README.md` | User-facing docs. Keep in sync if CLI behavior changes. |
 
-Platform dirs (`linux/`, `windows/`) hold the scripts; `shared/` holds the
-configs. Scripts resolve configs beside themselves (install temp dir, where
-the installers flatten everything) or via `../shared` (repo checkout).
+Platform dirs (`linux/`, `windows/`) hold the scripts; `shared/<editor>/`
+holds each editor's configs. Scripts resolve configs beside themselves in
+per-editor subdirs (install temp dir, where the installers flatten into
+`<editor>/`) or via `../shared` (repo checkout).
 
 ## Technology
 
@@ -67,18 +69,24 @@ The tool is one **dashboard** — a repaint loop. There is no flag-driven plan
 flow; everything (install, config, reset, uninstall) is a dashboard action.
 
 1. **Render** (`render_dashboard`/`Show-Dashboard`): a boxed status table for
-   all 2 forks — installed version, latest version, settings sync state,
+   all 3 editors — installed version, latest version, settings sync state,
    missing-extension count. Detection (`detect_forks`) runs in parallel and
    caches results per session.
 2. **Pick** (`run_dashboard`/`Run-Dashboard`): pick an editor, then an
    action. The action menu offers Install, then Config / Reset only when the
    editor is installed, then Uninstall / Menu / Quit.
 3. **Act**: `install_editor`/`Install-Editor` (Linux picks the variant by
-   package manager; Windows asks for User / System / MSI),
+   package manager; Windows asks for User / System / MSI; Zed skips the
+   variant picker — one installer),
    `apply_fork`/`Apply-Fork` (settings + extensions, with `REVERT`/`$Revert`
    toggling factory-reset behavior), `uninstall_editor`/`Uninstall-Editor`.
    Extensions use a multiselect picker (toggle numbers, `a`=all, `n`=none,
-   `i`/`u` install/uninstall selection).
+   `i`/`u` install/uninstall selection). For Zed there is no extension CLI:
+   install queues `"id": true` into the source template's
+   `auto_install_extensions` and redeploys settings (`zed_ext_set`/
+   `Set-ZedExtension`); uninstall marks it false and deletes the extension's
+   folder under `%LOCALAPPDATA%\Zed\extensions\installed` /
+   `~/.local/share/zed/extensions/installed`.
 
 The dashboard is a **repaint loop**: every pick clears the screen (TTY only)
 and redraws the banner + status table + a notice line + the active menu, all
@@ -112,7 +120,9 @@ subprocess calls. The PowerShell port has the same concern: native CLI calls
 get `$null |` piped in to close stdin, and prompts read via `[Console]::In`
 (read-lines return `$null` on EOF, mirroring bash `read || ans=n`).
 
-`FORK_DIR` maps fork → config dir name (`Code`, `VSCodium`).
+`FORK_DIR` maps fork → config dir name (`Code`, `VSCodium`, `zed`).
+`FORK_EXT_DIR[zed]` points at Zed's extension install dir (the VSCode-family
+forks manage extensions through their CLI instead).
 
 ### Reset (dashboard action)
 
@@ -143,12 +153,13 @@ The tools resolve `settings.json`/`extensions.json` beside the script
 
 - CI (`.github/workflows/ci.yml`) runs on every push/PR: bash syntax check,
   sandboxed dashboard smoke tests for both config layouts (checkout
-  `../shared` and flattened install) — a fake `code`/`codium` on PATH, then
-  `q` piped in and assertions on the rendered frame — PowerShell parse checks
-  on pwsh 7 + 5.1, ASCII-only source check across all tool scripts (5.1
+  `../shared` and flattened install) — fake `code`/`codium`/`zed` on PATH,
+  then `q` piped in and assertions on the rendered frame — PowerShell parse
+  checks on pwsh 7 + 5.1, ASCII-only source check across all tool scripts (5.1
   misreads non-ASCII ps1 as ANSI — a real regression source; bash must stay
   ASCII too so the ports' output stays byte-identical), `extensions.md`
-  coverage of every `extensions.json` ID, and bash/ps1 version lockstep.
+  coverage of every `extensions.json` ID (all three files), and bash/ps1
+  version lockstep.
 - Locally: Linux — `bash -n linux/syncode.sh`;
   `printf 'q\n' | bash linux/syncode.sh` (dashboard smoke run).
   `bash linux/release.sh` runs the release module self-check (no network).
@@ -171,24 +182,22 @@ The tools resolve `settings.json`/`extensions.json` beside the script
 - **No new dependencies.** Prefer a few lines of coreutils + bash builtins
   over adding tools. This is a deliberate zero-dependency design.
 - **`extensions.json` is parsed by regex**, not a JSON parser:
-  `grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"'` (`ext_ids`). Consequences:
-  - IDs must be lowercase `publisher.name` (no uppercase, no dots inside the
-    name beyond the publisher separator).
-  - Comments are fine, but keep values quoted strings.
-  - Any string that *looks* like `publisher.name` anywhere in the file counts
-    as an extension — don't add prose text with that shape.
-- **`settings.json` is applied verbatim** to every editor. Keep it portable:
-  no absolute paths, no OS-specific keys (fonts, terminal default profiles,
-  machine paths). VSCodium-only keys like `workbench.experimental.*` are
-  tolerated by other forks, but know they exist.
-- **`extensions.md` must stay in sync with `extensions.json`** — every ID in
-  the JSON is documented there; they're grouped by the same `//!` section
-  comments.
-- **Verified against Open VSX** — extension IDs in this repo are chosen
-  because they exist on Open VSX (the VSCodium marketplace). VS Code installs
-  the same IDs from the Microsoft Marketplace. Proprietary extensions
-  (e.g. GitHub Copilot) don't exist on Open VSX and will fail to install —
-  `syncode` reports and continues by design.
+  - `code`/`codium`: `grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"'` (`ext_ids`) —
+    IDs must be lowercase `publisher.name`; any string with that shape
+    anywhere in the file counts as an extension, so no prose with that shape.
+  - `zed`: line-based — each ID sits ALONE on its line as `"id"` with an
+    optional trailing comma (`sed -n 's/.../p'`). No trailing comments on ID
+    lines. The constraint is documented in the file header.
+  - Comments are fine in both; keep values quoted strings.
+- **Settings are per editor**: `<editor>/settings.json` is applied verbatim
+  to that editor only. Keep every file portable: no absolute paths, no
+  OS-specific keys (fonts, terminal default profiles, machine paths).
+- **`extensions.md` must stay in sync with all three `extensions.json`
+  files** — every ID is documented there; CI enforces it per file.
+- **Verified against Open VSX / the Zed registry** — code/codium IDs exist on
+  Open VSX (VS Code installs the same IDs from Microsoft Marketplace);
+  zed IDs exist on the Zed extension registry. Proprietary extensions fail
+  to install — `syncode` reports and continues by design.
 - **Idempotency is a feature**: running twice is a no-op. Settings compared
   with `cmp -s`; only missing extensions are installed; never uninstall
   extensions the user added themselves (except in Reset mode, which only
@@ -207,7 +216,8 @@ The tools resolve `settings.json`/`extensions.json` beside the script
   Windows, no build/install step.
 - **Native per platform** — bash on Linux, PowerShell on Windows; no
   Git Bash, WSL, or cross-shell shims.
-- **Cross-fork** — one config drives VS Code and VSCodium.
+- **Cross-editor** — one repo drives VS Code, VSCodium, and Zed (per-editor
+  configs, shared release facts).
 - **One surface** — a single interactive dashboard; nothing to memorize.
 - Parallel editor detection keeps startup fast (bash version).
 

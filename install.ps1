@@ -7,14 +7,19 @@
 $ErrorActionPreference = "Stop"
 
 $REPO_RAW = "https://raw.githubusercontent.com/mehedi-codes/syncode/main"
-# src-path -> flat dst (syncode.ps1 expects configs beside it in the temp dir)
+# src-path -> flat dst (syncode.ps1 expects <editor>\settings.json beside it
+# in the temp dir)
 $FILES = @(
-    @{ Src = "windows/syncode.ps1";      Dst = "syncode.ps1" },
-    @{ Src = "windows/version.ps1";      Dst = "version.ps1" },
-    @{ Src = "windows/release.ps1";      Dst = "release.ps1" },
-    @{ Src = "shared/settings.json";     Dst = "settings.json" },
-    @{ Src = "shared/extensions.json";   Dst = "extensions.json" },
-    @{ Src = "shared/releases.json";     Dst = "releases.json" }
+    @{ Src = "windows/syncode.ps1";        Dst = "syncode.ps1" },
+    @{ Src = "windows/version.ps1";        Dst = "version.ps1" },
+    @{ Src = "windows/release.ps1";        Dst = "release.ps1" },
+    @{ Src = "shared/code/settings.json";  Dst = "code\settings.json" },
+    @{ Src = "shared/code/extensions.json"; Dst = "code\extensions.json" },
+    @{ Src = "shared/codium/settings.json"; Dst = "codium\settings.json" },
+    @{ Src = "shared/codium/extensions.json"; Dst = "codium\extensions.json" },
+    @{ Src = "shared/zed/settings.json";   Dst = "zed\settings.json" },
+    @{ Src = "shared/zed/extensions.json"; Dst = "zed\extensions.json" },
+    @{ Src = "shared/releases.json";       Dst = "releases.json" }
 )
 
 # TLS 1.2+ required for GitHub on Windows PowerShell 5.1 (defaults to TLS 1.0)
@@ -22,6 +27,9 @@ $FILES = @(
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) (".syncode." + [IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $tmp | Out-Null
+foreach ($d in @("code", "codium", "zed")) {
+    New-Item -ItemType Directory -Path (Join-Path $tmp $d) | Out-Null
+}
 
 try {
     foreach ($f in $FILES) {

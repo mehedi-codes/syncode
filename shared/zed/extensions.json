@@ -1,0 +1,26 @@
+{
+  // ============================================================
+  //  EXTENSIONS - Zed live install (2026-08)
+  //  Curated: general-purpose, verified on the Zed registry
+  //  (zed-industries/extensions).
+  //
+  //  FORMAT CONSTRAINT: each ID must sit ALONE on its line as
+  //  "id" with an optional trailing comma - syncode parses this
+  //  file line-based (no JSON parser). No trailing comments.
+  //
+  //  Install: written to auto_install_extensions in settings.json;
+  //  Zed downloads them on next launch (there is no extension CLI).
+  // ============================================================
+
+  "recommendations": [
+    //! Visual / UI
+    // catppuccin-icons: file icon theme (Catppuccin)
+    "catppuccin-icons",
+
+    //! Editor utilities
+    // emmet: HTML/CSS abbreviation expansion
+    "emmet",
+    // git-firefly: inline git blame + hunk staging
+    "git-firefly"
+  ]
+}

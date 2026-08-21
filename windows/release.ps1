@@ -40,7 +40,8 @@ function Get-LatestVersion($fork) {
     try {
         $r = Invoke-RestMethod -Uri (Get-ReleaseLatestApi $fork) `
             -Headers @{ "User-Agent" = "syncode" } -TimeoutSec 10
-        return $r.tag_name
+        # zed tags carry a leading v (v1.16.1); normalize like the bash port
+        return (($r.tag_name) -replace '^v', '')
     } catch {
         $resp = $_.Exception.Response
         if ($null -ne $resp -and [int]$resp.StatusCode -eq 403) {
@@ -68,6 +69,11 @@ function Test-ReleaseModule {
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/codium_<ver>_amd64.deb", (Get-ReleaseInstallerUrl "codium" "linux")),
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/codium-<ver>-el8.x86_64.rpm", (Get-ReleaseInstallerUrl "codium" "linuxRpm")),
         @("https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodium-linux-x64-<ver>.tar.gz", (Get-ReleaseInstallerUrl "codium" "linuxTar")),
+        @("https://api.github.com/repos/zed-industries/zed/releases/latest", (Get-ReleaseLatestApi "zed")),
+        @("https://github.com/zed-industries/zed/releases/download/v<ver>/Zed-x86_64.exe", (Get-ReleaseInstallerUrl "zed" "win")),
+        @("https://github.com/zed-industries/zed/releases/download/v<ver>/zed-linux-x86_64.tar.gz", (Get-ReleaseInstallerUrl "zed" "linuxTar")),
+        @("exe-dir", (Get-ReleaseUninstallType "zed" "win")),
+        @("ZedIndustries.Zed", (Get-ReleaseWinget "zed")),
         @("inno", (Get-ReleaseUninstallType "code" "win")),
         @("pkg",  (Get-ReleaseUninstallType "code" "linux")),
         @("unins000.exe", (Get-ReleaseUninstallExe "code")),

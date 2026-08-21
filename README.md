@@ -9,11 +9,12 @@
 :......::::::..:::::..::::..:::......::::.......:::........:::........::
 ```
 
-> Sync and manage your VSCode and VSCodium editors.
+> Sync and manage your VSCode, VSCodium and Zed editors.
 
-**syncode** keeps your VS Code-style editors in sync from one command. It
-detects which editors you have, copies your settings in, and installs your
-extensions — so a fresh machine ends up with the same editor setup.
+**syncode** keeps your code editors in sync from one command. It detects
+which editors you have, copies your settings in, and installs your extensions
+— so a fresh machine ends up with the same editor setup. Each editor gets its
+own settings and extension list.
 
 - **New machine?** Run it once and your editors are configured.
 - **Changed something?** Run it again — it only fills in what's missing.
@@ -55,7 +56,7 @@ What happens next:
 
 1. The dashboard shows a **status table** — what's installed, what's out of
    date, what's in sync, what extensions are missing.
-2. You **pick an editor** (VSCode or VSCodium).
+2. You **pick an editor** (VSCode, VSCodium, or Zed).
 3. You **pick an action**: Install (with an installer-variant picker on
    Windows), Config (settings / extensions), Reset, or Uninstall.
 4. Destructive actions (**Reset**, **Uninstall**) ask you to type the word to
@@ -75,13 +76,15 @@ stays visible as a notice line:
   +----------+-----------+-------------+----------+------------+
   | VSCode   | 1.132.0   | 1.133.0     | synced   | 2 missing  |
   | VSCodium | 1.126.0   | 1.126.04524 | diverged | 1 missing  |
+  | Zed      | 1.16.1    | 1.16.1      | synced   | up to date |
   +----------+-----------+-------------+----------+------------+
 
   Pick an editor:
 
   1. VSCode
   2. VSCodium
-  3. Quit
+  3. Zed
+  4. Quit
 
   Enter an option: 1
 
@@ -121,10 +124,13 @@ stays visible as a notice line:
   **Extensions** count of what's missing. Columns grow to fit; the header is
   bold on a terminal.
 - **Config** (only offered when the editor is installed) splits into
-  **Settings** — copy the shared settings file, backing up to `.bak` — and
+  **Settings** — copy that editor's settings file, backing up to `.bak` — and
   **Extensions** — the multiselect picker above.
 - **Install** downloads the latest stable release. On Windows you first pick
-  an installer variant (User / System / MSI).
+  an installer variant (User / System / MSI); Zed ships one installer so the
+  picker is skipped. Linux installs VSCode/VSCodium via your package manager
+  (apt, dnf/yum, or a tarball fallback); Zed always installs from the
+  official tarball into `~/.local/zed.app` with a `~/.local/bin/zed` symlink.
 - **Reset** and **Uninstall** are destructive; syncode asks you to type the
   word to confirm.
 - `Menu` returns to the editor list; `Quit` (or `q`) exits. Invalid input
@@ -152,9 +158,9 @@ your package manager (apt, dnf/yum, or a tarball).
 ### Uninstall an editor
 
 Pick the editor, then `Uninstall` — type `uninstall` to confirm. Removes the
-editor binary *and* its config directory. Windows installs run
+editor binary *and* its config directory. Windows VSCode/VSCodium installs run
 `/VERYSILENT /NORESTART /mergetasks=!runcode` so the editor never launches on
-its own.
+its own (Zed: plain silent flags).
 
 ### Reset to factory defaults
 
@@ -170,12 +176,12 @@ Pick the editor, then `Reset` — type `reset` to confirm. Per editor:
 The tool is an interactive **repaint loop**: detect → render → pick → act.
 
 1. **Render** — the status table reads installed/latest versions, settings
-   sync state, and missing-extension counts for both editor forks (detection
-   runs in parallel).
+   sync state, and missing-extension counts for every editor (detection runs
+   in parallel on Linux).
 2. **Pick** — an editor, then an action: install, config, reset, uninstall.
-3. **Act** — settings are copied (backed up to `.bak` first), only *missing*
-   extensions are installed, and the result appears as a notice line on the
-   repainted frame.
+3. **Act** — that editor's settings are copied (backed up to `.bak` first),
+   only *missing* extensions are installed, and the result appears as a
+   notice line on the repainted frame.
 
 ### Idempotent & safe
 
@@ -193,12 +199,13 @@ install.sh        one-time runner (root — curl-fetches tool + configs)
 install.ps1       one-time runner (root — irm/Invoke-WebRequest fetches + runs)
 linux/            syncode.sh + version.sh + release.sh — Linux (bash 4+)
 windows/          syncode.ps1 + version.ps1 + release.ps1 — Windows (PowerShell)
-shared/           settings.json + extensions.json + releases.json + extensions.md
-                  (configs live in shared/; scripts find them via ../shared in a
-                  checkout, or beside the script in the install temp dir)
+shared/           per-editor configs + releases.json + extensions.md
+                  code/ codium/ zed/   each holds settings.json + extensions.json
+                  (scripts find them via ../shared in a checkout, or beside the
+                  script in <editor>/ subdirs of the install temp dir)
 ```
 
-`releases.json` maps each editor fork to its release API, installer URLs,
+`releases.json` maps each editor to its release API, installer URLs,
 uninstall method, and winget id — it powers the dashboard's install/uninstall
 and latest column. Version comparison lives in `version.sh`/`version.ps1`;
 release lookups in `release.sh`/`release.ps1`. Each module self-checks when
@@ -212,7 +219,9 @@ run directly (e.g. `bash linux/release.sh`).
 - Extensions are installed from the marketplace your editor uses (e.g.
   Open VSX for VSCodium). Proprietary extensions like GitHub Copilot that
   have no marketplace equivalent will fail to install — syncode reports the
-  failure and continues.
+  failure and continues. Zed has no extension CLI: its picks are written to
+  `auto_install_extensions` in Zed's `settings.json`, and Zed downloads them
+  on next launch.
 - Fonts, terminal default profiles, and other machine-specific settings
   aren't portable across OSes — keep them out of `settings.json` or expect
   to adjust per machine.

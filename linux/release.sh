@@ -33,7 +33,7 @@ release_url() { release_installer_url "$1" "$2" | sed "s|<ver>|$3|g"; }
 # release_latest <fork> - echoes latest version; exit 1 on failure.
 # Sets RELEASE_RATE_LIMITED=1 if codium hit the GitHub 403 rate limit.
 release_latest() {
-  local fork="$1" api code tmp
+  local fork="$1" api code tmp tag
   RELEASE_RATE_LIMITED=0
   api="$(release_latest_api "$fork")"
   case "$fork" in
@@ -41,7 +41,7 @@ release_latest() {
       RELEASE_LATEST="$(curl -fsSL --max-time 10 "$api" 2>/dev/null \
         | sed -n 's/^\["\([^"]*\)".*/\1/p')" || true
       ;;
-    codium)
+    codium|zed)
       tmp="$(mktemp)"
       code="$(curl -sS -o "$tmp" -D "$tmp.h" -A "syncode" -w '%{http_code}' \
               --max-time 10 "$api" 2>/dev/null)" \
@@ -55,9 +55,16 @@ release_latest() {
         rm -f "$tmp" "$tmp.h"
         return 1
       fi
-      RELEASE_LATEST="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-        "$tmp" | head -n1)"
+      # grep -o + parameter expansion, not sed: some sed builds (msys)
+      # leak the greedy [^"]* capture across quotes on these huge
+      # single-line API responses.
+      tag="$(grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' "$tmp" | head -n1 || true)"
+      RELEASE_LATEST="${tag##*:\"}"
+      RELEASE_LATEST="${RELEASE_LATEST%\"}"
       rm -f "$tmp" "$tmp.h"
+      # zed tags carry a leading v (v1.16.1); normalize so the dashboard
+      # shows bare versions like the other forks
+      RELEASE_LATEST="${RELEASE_LATEST#v}"
       ;;
     *)
       return 1
@@ -100,6 +107,14 @@ release_selfcheck() {
         "$(release_installer_url codium linuxRpm)" codium.installer.linuxRpm
   check "https://github.com/VSCodium/vscodium/releases/download/<ver>/VSCodium-linux-x64-<ver>.tar.gz" \
         "$(release_installer_url codium linuxTar)" codium.installer.linuxTar
+  check "https://api.github.com/repos/zed-industries/zed/releases/latest" \
+        "$(release_latest_api zed)" zed.latestApi
+  check "https://github.com/zed-industries/zed/releases/download/v<ver>/Zed-x86_64.exe" \
+        "$(release_installer_url zed win)" zed.installer.win
+  check "https://github.com/zed-industries/zed/releases/download/v<ver>/zed-linux-x86_64.tar.gz" \
+        "$(release_installer_url zed linuxTar)" zed.installer.linuxTar
+  check "exe-dir" "$(release_uninstall_type zed win)" zed.uninstall.win.type
+  check "ZedIndustries.Zed" "$(release_winget zed)" zed.winget
   check "inno" "$(release_uninstall_type code win)" code.uninstall.win.type
   check "pkg"  "$(release_uninstall_type code linux)" code.uninstall.linux.type
   check "unins000.exe" "$(release_uninstall_exe code)" code.uninstall.win.exe

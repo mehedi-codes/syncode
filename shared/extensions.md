@@ -1,9 +1,9 @@
 # Extensions
 
-Curated, general-purpose, language-agnostic extensions installed by `syncode`
-(see `extensions.json`). Grouped by the same `//!` sections as the config.
-All are published on **Open VSX** (the VSCodium marketplace); VS Code users
-install the same IDs from the Microsoft Marketplace.
+Curated, general-purpose, language-agnostic extensions installed by `syncode`.
+Each editor has its own list: `code/extensions.json`, `codium/extensions.json`
+(both Open VSX / Microsoft Marketplace IDs), and `zed/extensions.json` (Zed
+registry IDs). Grouped by the same `//!` sections as the configs.
 
 ## Install
 
@@ -12,8 +12,12 @@ codium --install-extension <id>     # VSCodium / any fork with a CLI
 code --install-extension <id>       # VS Code
 ```
 
-Versions below are the latest on Open VSX at time of writing — install by ID
-so updates apply automatically.
+Zed has no extension CLI — syncode writes its picks into
+`auto_install_extensions` in Zed's `settings.json` and Zed downloads them on
+next launch.
+
+Versions below are the latest at time of writing — install by ID so updates
+apply automatically.
 
 ---
 
@@ -266,5 +270,29 @@ No keybindings.
 
 ---
 
-*Verified 2026-08-16 against the Open VSX registry. Install by ID so
-versions track the marketplace.*
+## Zed (`zed/extensions.json`)
+
+IDs live on the [Zed extension registry](https://zed.dev/extensions)
+(mirrored at [zed-industries/extensions](https://github.com/zed-industries/extensions)).
+Format constraint: each ID sits alone on its line — the file is parsed
+line-based, so no trailing comments.
+
+### `catppuccin-icons` — Catppuccin Icons
+
+File icon theme in the four Catppuccin flavors (Latte, Frappe, Macchiato,
+Mocha). Activate via Command Palette → `icon theme: select` after install.
+
+### `emmet` — Emmet
+
+HTML/CSS abbreviation expansion (`div.class>span` + Tab). Works in HTML, CSS,
+JSX-adjacent scopes. No settings required.
+
+### `git-firefly` — Git Firefly
+
+Git integration inside Zed: inline blame, hunk staging/unstaging from the
+editor, branch and commit helpers. Complements Zed's built-in git panel.
+
+---
+
+*Verified 2026-08 against the Open VSX registry and the Zed extension
+registry. Install by ID so versions track the marketplace.*

@@ -1,0 +1,26 @@
+{
+  // ============================================================
+  //  EXTENSIONS — VSCodium live install (2026-08-16)
+  //  Curated: general-purpose, language/framework-agnostic only.
+  //  All verified on Open VSX (VSCodium's marketplace).
+  //  Install: codium --install-extension <id>
+  // ============================================================
+
+  "recommendations": [
+    //! Visual / UI
+    "littensy.charmed-icons",                 // file icon theme
+    "subframe7536.custom-ui-style",           // UI CSS overrides (custom-ui-style.stylesheet)
+
+    //! Editor utilities
+    "editorconfig.editorconfig",              // apply project .editorconfig rules
+    "jasonlhy.hungry-delete",                 // Ctrl+Backspace deletes whole indent blocks
+    "cardinal90.multi-cursor-case-preserve",  // case-aware multi-cursor typing
+    "arthurlobo.easy-codesnap",               // code screenshots (modern fork of codesnap)
+
+    //! Editor niceties
+    "aaron-bond.better-comments",             // highlighted/categorized comments
+
+    //! Git
+    "codezombiech.gitignore"                  // .gitignore generator
+  ]
+}

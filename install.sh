@@ -12,8 +12,12 @@ FILES=(
   "linux/syncode.sh:syncode.sh"
   "linux/version.sh:version.sh"
   "linux/release.sh:release.sh"
-  "shared/settings.json:settings.json"
-  "shared/extensions.json:extensions.json"
+  "shared/code/settings.json:code/settings.json"
+  "shared/code/extensions.json:code/extensions.json"
+  "shared/codium/settings.json:codium/settings.json"
+  "shared/codium/extensions.json:codium/extensions.json"
+  "shared/zed/settings.json:zed/settings.json"
+  "shared/zed/extensions.json:zed/extensions.json"
   "shared/releases.json:releases.json"
 )
 
@@ -32,8 +36,9 @@ fi
 tmp="$(mktemp -d .syncode.XXXXXX)"
 trap 'rm -rf -- "$tmp"' EXIT
 
-# One curl call fetches all files in parallel into the temp dir (flattened:
-# syncode.sh expects configs beside it)
+# One curl call fetches all files in parallel into the temp dir (flattened
+# per-editor subdirs: syncode.sh expects <editor>/settings.json beside it)
+mkdir -p "$tmp/code" "$tmp/codium" "$tmp/zed"
 curl_args=()
 for entry in "${FILES[@]}"; do
   src="${entry%%:*}"

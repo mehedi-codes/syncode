@@ -29,5 +29,17 @@
       "linux": { "type": "pkg", "name": "codium" }
     },
     "package": { "winget": "VSCodium.VSCodium" }
+  },
+  "zed": {
+    "latestApi": "https://api.github.com/repos/zed-industries/zed/releases/latest",
+    "installer": {
+      "win":   "https://github.com/zed-industries/zed/releases/download/v<ver>/Zed-x86_64.exe",
+      "linuxTar": "https://github.com/zed-industries/zed/releases/download/v<ver>/zed-linux-x86_64.tar.gz"
+    },
+    "uninstall": {
+      "win":   { "type": "exe-dir", "dir": "Zed" },
+      "linux": { "type": "tarball", "name": "zed" }
+    },
+    "package": { "winget": "ZedIndustries.Zed" }
   }
 }

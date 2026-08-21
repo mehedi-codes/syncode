@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================
-#  syncode - Sync and manage your VSCode and VSCodium editors
-#  Version: 1.4.0
+#  syncode - Sync and manage your VSCode, VSCodium and Zed editors
+#  Version: 1.5.0
 # ============================================================
 set -Eeuo pipefail
 
-VERSION="1.4.0"
+VERSION="1.5.0"
 TOOL_NAME="syncode"
-DESCRIPTION="Sync and manage your VSCode and VSCodium editors"
+DESCRIPTION="Sync and manage your VSCode, VSCodium and Zed editors"
 
 BANNER="$(cat <<'BANNER_EOF'
 :'######:'##:::'##'##::: ##:'######::'#######:'########:'########:
@@ -37,8 +37,9 @@ fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SCRIPT_NAME="$(basename -- "${BASH_SOURCE[0]}")"
 
-# Config dir: beside the script (install temp dir) or ../shared (repo checkout)
-if [[ -f "$SCRIPT_DIR/settings.json" && -f "$SCRIPT_DIR/extensions.json" ]]; then
+# Config dir: beside the script (install temp dir, per-editor subdirs)
+# or ../shared (repo checkout)
+if [[ -f "$SCRIPT_DIR/code/settings.json" && -f "$SCRIPT_DIR/code/extensions.json" ]]; then
   CONFIG_DIR="$SCRIPT_DIR"
 else
   CONFIG_DIR="$(cd -- "$SCRIPT_DIR/../shared" && pwd -P)"
@@ -86,19 +87,46 @@ esac
 declare -A FORK_DIR=(
   [code]="Code"
   [codium]="VSCodium"
+  [zed]="zed"
 )
-FORK_ORDER=(code codium)
+FORK_ORDER=(code codium zed)
 
 # fork -> full display name (dashboard menus)
 declare -A FORK_FULL=(
   [code]="VSCode"
   [codium]="VSCodium"
+  [zed]="Zed"
+)
+
+# fork -> extensions install dir (zed only; VSCode-family forks manage
+# extensions through their CLI instead)
+declare -A FORK_EXT_DIR=(
+  [zed]="$HOME/.local/share/zed/extensions/installed"
 )
 
 check=$'\u2713'
 
-settings_path() { printf '%s/%s/User/settings.json\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
-backup_path()   { printf '%s/%s/User/settings.json.bak\n' "$DATA_ROOT" "${FORK_DIR[$1]}"; }
+# zed's config sits flat under its dir (no User subdir like the
+# VSCode-family forks): ~/.config/zed/settings.json
+settings_path() {
+  if [[ "$1" == zed ]]; then
+    printf '%s/%s/settings.json\n' "$DATA_ROOT" "${FORK_DIR[$1]}"
+  else
+    printf '%s/%s/User/settings.json\n' "$DATA_ROOT" "${FORK_DIR[$1]}"
+  fi
+}
+backup_path() {
+  if [[ "$1" == zed ]]; then
+    printf '%s/%s/settings.json.bak\n' "$DATA_ROOT" "${FORK_DIR[$1]}"
+  else
+    printf '%s/%s/User/settings.json.bak\n' "$DATA_ROOT" "${FORK_DIR[$1]}"
+  fi
+}
+
+# per-editor source configs under CONFIG_DIR (<editor>/settings.json,
+# <editor>/extensions.json)
+settings_src() { printf '%s/%s/settings.json\n' "$CONFIG_DIR" "$1"; }
+ext_file()     { printf '%s/%s/extensions.json\n' "$CONFIG_DIR" "$1"; }
 
 # ------------------------------------------------------------
 #  Parallel detection (background jobs, PIDs tracked)
@@ -119,7 +147,8 @@ detect_forks() {
       if command -v "$fork" &>/dev/null; then
         found=true
       fi
-      local dir="${DATA_ROOT}/${FORK_DIR[$fork]}/User"
+      local dir="${DATA_ROOT}/${FORK_DIR[$fork]}"
+      [[ "$fork" != zed ]] && dir="$dir/User"
       if [[ -d "$dir" ]]; then
         found=true
       fi
@@ -152,22 +181,36 @@ trap cleanup EXIT
 #  Extension helpers
 # ------------------------------------------------------------
 ext_ids() {
-  # extract "publisher.name" entries from extensions.json
-  grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"' "$CONFIG_DIR/extensions.json" | tr -d '"'
+  # extract extension IDs from <fork>'s extensions.json.
+  # code/codium: "publisher.name" anywhere in the file.
+  # zed: dot-less IDs, each ALONE on its line (format constraint
+  # documented in shared/zed/extensions.json).
+  local f="$1"
+  if [[ "$f" == zed ]]; then
+    sed -n 's/^[[:space:]]*"\([a-z0-9-]*\)",\{0,1\}[[:space:]]*$/\1/p' "$(ext_file zed)"
+  else
+    grep -oE '"[a-z0-9-]+\.[a-z0-9-]+"' "$(ext_file "$f")" | tr -d '"'
+  fi
 }
 
 # installed_exts <fork> - list of installed extensions, cached per session
-# (invalidated by invalidate_exts after install/uninstall).
+# (invalidated by invalidate_exts after install/uninstall). zed has no
+# extension CLI: an extension counts as installed when its folder exists
+# under FORK_EXT_DIR[zed].
 declare -A EXT_CACHE=()
 
 installed_exts() {
-  local cli
   if [[ "${EXT_CACHE[$1]+set}" == set ]]; then
     printf '%s' "${EXT_CACHE[$1]}"
     return
   fi
-  cli="$(command -v "$1" 2>/dev/null || true)"
-  EXT_CACHE[$1]="$( [[ -n "$cli" ]] && "$cli" --list-extensions </dev/null 2>/dev/null || true )"
+  if [[ "$1" == zed ]]; then
+    EXT_CACHE[$1]="$(ls "${FORK_EXT_DIR[$1]}" 2>/dev/null || true)"
+  else
+    local cli
+    cli="$(command -v "$1" 2>/dev/null || true)"
+    EXT_CACHE[$1]="$( [[ -n "$cli" ]] && "$cli" --list-extensions </dev/null 2>/dev/null || true )"
+  fi
   printf '%s' "${EXT_CACHE[$1]}"
 }
 
@@ -183,7 +226,7 @@ editor_version() {
 
 missing_exts() {
   local want have id out=""
-  want="$(ext_ids)"
+  want="$(ext_ids "$1")"
   have="$(installed_exts "$1")"
   for id in $want; do
     if ! printf '%s\n' "$have" | grep -qx "$id"; then
@@ -209,15 +252,14 @@ plan_fork() {
     local sp bd
     sp="$(settings_path "$fork")"
     bd="$(backup_path "$fork")"
-    if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
+    if [[ -f "$sp" ]] && cmp -s "$sp" "$(settings_src "$fork")"; then
       out="settings already in sync"
     else
       out="copy settings (backup -> .bak)"
       [[ -f "$bd" ]] && out="$out (overwrite .bak)"
     fi
-    local missing cli
-    cli="$(command -v "$fork" 2>/dev/null || true)"
-    if [[ -n "$cli" ]]; then
+    if [[ "$fork" == zed ]] || [[ -n "$(command -v "$fork" 2>/dev/null || true)" ]]; then
+      local missing
       missing="$(missing_exts "$fork")"
       if [[ -n "$missing" ]]; then
         out="$out, install missing extensions: $missing"
@@ -232,9 +274,10 @@ plan_fork() {
 }
 
 apply_fork() {
-  local fork="$1" scope="${2:-all}" sp bd cli
+  local fork="$1" scope="${2:-all}" sp bd cli src
   sp="$(settings_path "$fork")"
   bd="$(backup_path "$fork")"
+  src="$(settings_src "$fork")"
 
   mkdir -p "$(dirname -- "$sp")"
 
@@ -250,33 +293,42 @@ apply_fork() {
         echo "$fork: no settings.json to revert"
       fi
     else
-      if [[ -f "$sp" ]] && cmp -s "$sp" "$CONFIG_DIR/settings.json"; then
+      if [[ -f "$sp" ]] && cmp -s "$sp" "$src"; then
         echo "$fork: settings already in sync"
       else
         [[ -f "$sp" ]] && cp -- "$sp" "$bd"
-        cp -- "$CONFIG_DIR/settings.json" "$sp"
+        cp -- "$src" "$sp"
         echo "$fork: settings copied (backup -> .bak)"
       fi
     fi
   fi
 
   if [[ "$scope" == all || "$scope" == extensions ]]; then
-    # extensions: install missing / uninstall syncode-installed
+    # extensions: install missing / uninstall syncode-installed.
+    # zed has no extension CLI - its picker queues entries into the
+    # source template's auto_install_extensions; here only Reset mode
+    # removes managed extension folders from disk.
     cli="$(command -v "$fork" 2>/dev/null || true)"
-    if [[ -n "$cli" ]]; then
+    if [[ -n "$cli" || "$fork" == zed ]]; then
       local id missing
       missing="$(missing_exts "$fork")"
 
       if [[ "$REVERT" == true ]]; then
-        local want
-        want="$(ext_ids)"
+        local want dir
+        want="$(ext_ids "$fork")"
         for id in $want; do
           if printf '%s\n' "$(installed_exts "$fork")" | grep -qx "$id"; then
-            "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
-            echo "$fork: uninstalled $id"
+            if [[ "$fork" == zed ]]; then
+              dir="${FORK_EXT_DIR[$fork]}/$id"
+              rm -rf -- "$dir"
+              echo "$fork: uninstalled $id"
+            else
+              "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
+              echo "$fork: uninstalled $id"
+            fi
           fi
         done
-      else
+      elif [[ "$fork" != zed ]]; then
         for id in $missing; do
           if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
             echo "$fork: installed $id"
@@ -294,6 +346,72 @@ apply_fork() {
     fi
   fi
   invalidate_exts "$fork"
+}
+
+# zed_ext_set <id> <true|false> - upsert "id": value into the
+# auto_install_extensions block of the zed SOURCE template
+# ($(settings_src zed)); callers redeploy settings afterwards so the
+# change reaches the editor. Zed has no extension CLI - entries here
+# make Zed install (true) or skip+never-reinstall (false) on launch.
+# We own the template's shape, so the block is regenerated wholesale
+# (sorted keys, valid JSON commas). Returns 1 when the template is
+# missing or the block can't be found (caller shows a notice).
+# ponytail: regex surgery on a file whose format syncode controls;
+# revisit only if hand-edited templates become a support theme.
+zed_ext_set() {
+  local id="$1" val="$2" src tmp
+  src="$(settings_src zed)"
+  [[ -f "$src" ]] || return 1
+
+  # harvest current managed entries from the block
+  local -A cur=()
+  local line inblk=0 found=0
+  while IFS= read -r line; do
+    if (( inblk == 0 )); then
+      if [[ "$line" =~ \"auto_install_extensions\"[[:space:]]*:[[:space:]]*\{ ]]; then
+        found=1
+        # inline empty form ("{}") closes on the same line - nothing to scan
+        [[ "$line" =~ \}[[:space:]]*,?[[:space:]]*$ ]] || inblk=1
+      fi
+      continue
+    fi
+    [[ "$line" =~ ^[[:space:]]*\} ]] && break
+    [[ "$line" =~ \"([a-z0-9-]+)\"[[:space:]]*:[[:space:]]*(true|false) ]] \
+      && cur[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+  done < "$src"
+  (( found )) || return 1
+  cur[$id]="$val"
+
+  # rebuild body: sorted keys, commas only between entries
+  local keys=() body="" i
+  mapfile -t keys < <(printf '%s\n' "${!cur[@]}" | sort)
+  for ((i = 0; i < ${#keys[@]}; i++)); do
+    body+="    \"${keys[$i]}\": ${cur[${keys[$i]}]}"
+    (( i < ${#keys[@]} - 1 )) && body+=","
+    body+=$'\n'
+  done
+
+  # splice: copy the file, swapping the block region for the rebuild
+  tmp="$(mktemp)"
+  local emit=1
+  while IFS= read -r line; do
+    if (( emit == 1 )); then
+      if [[ "$line" =~ ^([[:space:]]*)\"auto_install_extensions\"[[:space:]]*:[[:space:]]*\{\}(.*)$ ]]; then
+        printf '%s"auto_install_extensions": {\n%s%s}%s\n' \
+          "${BASH_REMATCH[1]}" "$body" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+        emit=0
+      elif [[ "$line" =~ \"auto_install_extensions\"[[:space:]]*:[[:space:]]*\{ ]]; then
+        printf '%s\n' "$line"
+        emit=0
+      else
+        printf '%s\n' "$line"
+      fi
+    elif [[ "$line" =~ ^([[:space:]]*\})(.*)$ ]]; then
+      printf '%s%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      emit=1
+    fi
+  done < "$src" > "$tmp"
+  mv -- "$tmp" "$src"
 }
 
 # ------------------------------------------------------------
@@ -336,6 +454,9 @@ resolve_cli() {
       p="/usr/bin/codium"
       [[ -x "$HOME/.local/share/VSCodium/bin/codium" ]] && p="$HOME/.local/share/VSCodium/bin/codium"
       ;;
+    zed)
+      p="$HOME/.local/bin/zed"
+      ;;
   esac
   [[ -x "$p" ]] && printf '%s' "$p"
   return 0
@@ -354,7 +475,7 @@ render_dashboard() {
     [[ -z "$inst" ]] && inst="-"
     latest="$(latest_for "$f")"
     if [[ -f "$(settings_path "$f")" ]]; then
-      if cmp -s "$(settings_path "$f")" "$CONFIG_DIR/settings.json"; then
+      if cmp -s "$(settings_path "$f")" "$(settings_src "$f")"; then
         settings="synced"
       else
         settings="diverged"
@@ -507,15 +628,28 @@ download_with_progress() {
 }
 
 # install_editor <fork> [ver] - download (syncode temp name) + silent install.
-# apt -> .deb, dnf/yum -> .rpm, else tarball -> ~/.local/share/<ForkDir>.
-# "already installed" check lives at the call sites (dashboard / -i flag);
-# installs are always fresh (no update path - editors self-update).
+# code/codium: apt -> .deb, dnf/yum -> .rpm, else tarball ->
+# ~/.local/share/<ForkDir>. zed: always the official tarball -> the
+# upstream layout (~/.local/zed.app + ~/.local/bin/zed symlink; no
+# deb/rpm/AppImage exists). "already installed" check lives at the call
+# sites (dashboard); installs are always fresh (editors self-update).
 install_editor() {
   local fork="$1" ver="$2" url tmp dest
   ver="${ver:-$(latest_for "$fork")}"
   [[ "$ver" == "unknown" ]] && { log_error "$fork: can't determine latest version"; return 1; }
   echo "$fork: Installing $ver..."
-  if command -v apt-get >/dev/null 2>&1; then
+  if [[ "$fork" == zed ]]; then
+    url="$(release_installer_url "$fork" linuxTar)"
+    tmp="$(mktemp --suffix=.tar.gz)"
+    download_with_progress "$fork" "$ver" "$url" "$tmp" \
+      || { rm -f "$tmp"; return 1; }
+    dest="$HOME/.local"
+    mkdir -p "$dest/bin"
+    tar -xzf "$tmp" -C "$dest" \
+      || { log_error "$fork: extract failed"; rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
+    ln -sfn "$dest/zed.app/bin/zed" "$dest/bin/zed"
+  elif command -v apt-get >/dev/null 2>&1; then
     url="$(release_installer_url "$fork" linux)"
     tmp="$(mktemp --suffix=.deb)"
     download_with_progress "$fork" "$ver" "$url" "$tmp" \
@@ -548,7 +682,9 @@ install_editor() {
   invalidate_latest "$fork"
 }
 
-# uninstall_editor <fork> - pkg manager remove + config dir; tarball -> rm -rf.
+# uninstall_editor <fork> - pkg manager remove + config dir; tarball ->
+# rm -rf. zed: remove the ~/.local/bin/zed launcher, ~/.local/zed.app,
+# managed extension folders, then the config dir.
 uninstall_editor() {
   local fork="$1" pkg dir
   pkg="$(release_uninstall_name "$fork")"
@@ -558,8 +694,14 @@ uninstall_editor() {
   elif command -v dnf >/dev/null 2>&1 && rpm -q "$pkg" >/dev/null 2>&1; then
     sudo dnf remove -y "$pkg" || true
   fi
-  dir="$HOME/.local/share/${FORK_DIR[$fork]}"
-  [[ -d "$dir" ]] && rm -rf -- "$dir"
+  if [[ "$fork" == zed ]]; then
+    rm -f -- "$HOME/.local/bin/zed"
+    rm -rf -- "$HOME/.local/zed.app"
+    rm -rf -- "${FORK_EXT_DIR[$fork]}"
+  else
+    dir="$HOME/.local/share/${FORK_DIR[$fork]}"
+    [[ -d "$dir" ]] && rm -rf -- "$dir"
+  fi
   rm -rf -- "$DATA_ROOT/${FORK_DIR[$fork]}"
   echo "$fork removed"
   invalidate_installed "$fork"
@@ -574,7 +716,7 @@ uninstall_editor() {
 pick_extensions() {
   local fork="$1" ids=() id n line
   declare -A sel
-  mapfile -t ids < <(ext_ids)
+  mapfile -t ids < <(ext_ids "$fork")
   if [[ ${#ids[@]} -eq 0 ]]; then
     DASH_NOTICE="no extensions in extensions.json"
     return
@@ -616,34 +758,64 @@ pick_extensions() {
       i|I)
         local cli picked=()
         cli="$(command -v "$fork" 2>/dev/null || true)"
-        if [[ -z "$cli" ]]; then DASH_NOTICE="$fork not on PATH - cannot install"; continue; fi
+        if [[ -z "$cli" && "$fork" != zed ]]; then DASH_NOTICE="$fork not on PATH - cannot install"; continue; fi
         for id in "${ids[@]}"; do [[ -n "${sel[$id]:-}" ]] && picked+=("$id"); done
         if [[ ${#picked[@]} -eq 0 ]]; then DASH_NOTICE="nothing selected"; continue; fi
         local out=""
-        for id in "${picked[@]}"; do
-          if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
-            out+="installed $id"$'\n'
-          else
-            log_warn "$fork: FAILED to install $id"
-          fi
-        done
+        if [[ "$fork" == zed ]]; then
+          # no extension CLI: queue entries in the source template's
+          # auto_install_extensions, then deploy settings so Zed picks
+          # them up on next launch.
+          for id in "${picked[@]}"; do
+            if zed_ext_set "$id" true; then
+              out+="queued $id"$'\n'
+            else
+              out+="FAILED to queue $id"$'\n'
+            fi
+          done
+          apply_fork "$fork" settings || true
+          DASH_NOTICE="${out%$'\n'}"
+        else
+          for id in "${picked[@]}"; do
+            if "$cli" --install-extension "$id" --force </dev/null >/dev/null 2>&1; then
+              out+="installed $id"$'\n'
+            else
+              log_warn "$fork: FAILED to install $id"
+            fi
+          done
+          DASH_NOTICE="${out%$'\n'}"
+        fi
         sel=()
-        DASH_NOTICE="${out%$'\n'}"
         invalidate_exts "$fork"
         ;;
       u|U)
         local cli picked=()
         cli="$(command -v "$fork" 2>/dev/null || true)"
-        if [[ -z "$cli" ]]; then DASH_NOTICE="$fork not on PATH - cannot uninstall"; continue; fi
+        if [[ -z "$cli" && "$fork" != zed ]]; then DASH_NOTICE="$fork not on PATH - cannot uninstall"; continue; fi
         for id in "${ids[@]}"; do [[ -n "${sel[$id]:-}" ]] && picked+=("$id"); done
         if [[ ${#picked[@]} -eq 0 ]]; then DASH_NOTICE="nothing selected"; continue; fi
         local out=""
-        for id in "${picked[@]}"; do
-          "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
-          out+="uninstalled $id"$'\n'
-        done
+        if [[ "$fork" == zed ]]; then
+          # mark never-reinstall in the template + drop the installed
+          # folder now, then deploy so settings.json reflects it.
+          for id in "${picked[@]}"; do
+            if zed_ext_set "$id" false; then
+              rm -rf -- "${FORK_EXT_DIR[$fork]}/$id"
+              out+="uninstalled $id"$'\n'
+            else
+              out+="FAILED to update $id"$'\n'
+            fi
+          done
+          apply_fork "$fork" settings || true
+          DASH_NOTICE="${out%$'\n'}"
+        else
+          for id in "${picked[@]}"; do
+            "$cli" --uninstall-extension "$id" </dev/null >/dev/null 2>&1 || true
+            out+="uninstalled $id"$'\n'
+          done
+          DASH_NOTICE="${out%$'\n'}"
+        fi
         sel=()
-        DASH_NOTICE="${out%$'\n'}"
         invalidate_exts "$fork"
         ;;
       m|M)
@@ -671,14 +843,16 @@ run_dashboard() {
       echo ""
       echo "1. VSCode"
       echo "2. VSCodium"
-      echo "3. Quit"
+      echo "3. Zed"
+      echo "4. Quit"
       echo ""
       read -r -p "Enter an option: " line || line="q"
       line="${line%$'\r'}"
       case "$line" in
-        q|Q|3) echo "bye."; exit 0 ;;
+        q|Q|4) echo "bye."; exit 0 ;;
         code|1) editor="code"; break ;;
         codium|2) editor="codium"; break ;;
+        zed|3) editor="zed"; break ;;
         *) DASH_NOTICE="invalid: $line" ;;
       esac
     done

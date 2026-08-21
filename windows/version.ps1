@@ -45,6 +45,7 @@ function Get-InstalledVersion($fork) {
                 (Join-Path ${env:ProgramFiles(x86)} "VSCodium"),
                 (Join-Path $env:ProgramFiles "VSCodium")
             )
+            zed    = @()
         }
         foreach ($p in $paths[$fork]) {
             $pj = Join-Path $p "resources\app\package.json"
